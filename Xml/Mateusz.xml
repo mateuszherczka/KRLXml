@@ -1,4 +1,5 @@
 <Elements>
+	<Element Tag="ExternalData" Type="STRUCTTAG" Stacksize="5" />
 	<Element Tag="ExternalData.Mode" Type="INTEGER" Stacksize="5" />
 	<Element Tag="ExternalData.Tick" Type="INTEGER" Stacksize="5" />
 	<Element Tag="ExternalData.Id" Type="INTEGER" Stacksize="5" />
