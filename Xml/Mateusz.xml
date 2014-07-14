@@ -1,0 +1,7 @@
+<Elements>
+	<Element Tag="ExternalData.Mode" Type="INTEGER" Stacksize="5" />
+	<Element Tag="ExternalData.Tick" Type="INTEGER" Stacksize="5" />
+	<Element Tag="ExternalData.Id" Type="INTEGER" Stacksize="5" />
+	<Element Tag="ExternalData.Run" Type="BOOLEAN" Stacksize="5" />
+	<Element Tag="ExternalData.Frame" Type="FRAME" Stacksize="5" />   
+</Elements>

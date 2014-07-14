@@ -1,0 +1,320 @@
+&ACCESS RVP
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEF mhekxdemo( )
+;FOLD INI
+STRUC str char s[81]
+DECL str sendtext[11]
+DECL str rectext[11]
+DECL char sensorname[40]
+DECL str dummy
+BOOL errbl
+BOOL brk
+INT  errint
+INT i
+INT counter
+FRAME extframe
+BOOL holdon
+INT seconds
+
+DECL real position[3]
+REAL cpu
+REAL fan
+INT astate
+INT bstate
+BOOL cstate
+BOOL bNew
+
+INT offset
+
+DECL STATE_T state
+
+  ;FOLD BASISTECH INI
+    GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+    INTERRUPT ON 3
+    BAS (#INITMOV,0 )
+  ;ENDFOLD (BASISTECH INI)
+  
+  ;FOLD USER INI
+    ;Make your modifications here
+
+  ;ENDFOLD (USER INI)
+;ENDFOLD (INI)
+
+;FOLD Initial variables
+brk = FALSE
+counter = 0
+cstate = FALSE
+holdon = FALSE
+seconds = 1
+;ENDFOLD
+;FOLD Build Dataset to send and receive
+; send structure
+sendtext[1].s[] = "<Robot>"
+sendtext[2].s[] = "   <Data>"
+sendtext[3].s[] = "      <ComStatus>Ready</ComStatus>"
+sendtext[4].s[] = "   <Tick>"
+sendtext[5].s[] = "0"
+sendtext[6].s[] = "</Tick>"
+sendtext[7].s[] = "   </Data>"
+sendtext[8].s[] = "</Robot>"
+
+; receive structure
+rectext[1].s[] = "Mateusz.ExternalData.TString"
+rectext[2].s[] = "Mateusz.ExternalData.Position.XPos"
+rectext[3].s[] = "Mateusz.ExternalData.Position.YPos"
+rectext[4].s[] = "Mateusz.ExternalData.Position.ZPos"
+rectext[5].s[] = "Mateusz.ExternalData.Temperature.Cpu"
+rectext[6].s[] = "Mateusz.ExternalData.Temperature.Fan"
+rectext[7].s[] = "Mateusz.ExternalData.Ints.AState"
+rectext[8].s[] = "Mateusz.ExternalData.Ints.BState"
+rectext[9].s[] = "Mateusz.ExternalData.Boolean.CState"
+rectext[10].s[] = "Mateusz.ExternalData.Frames.XFrame"
+
+rectext[11].s[] = "Mateusz.ExternalData"
+;ENDFOLD
+;FOLD DECLare sensorname and open channel SampleSensor
+sensorname[]="Mateusz"
+errint = EKX_open(sensorname[])
+EKX_handleerror(errint)
+
+;ENDFOLD
+WHILE cstate == FALSE
+ 
+;FOLD Holdon
+IF holdon == TRUE THEN
+ HALT
+ELSE
+ WAIT SEC seconds
+ENDIF
+;ENDFOLD
+; The channel SampleSensor is open and the server expect data from robot
+; There are 2 ways to send data
+; The first one:
+; This is the very first message - telling that robot is ready.
+;FOLD Send Data by using easy send commands
+FOR i=1 TO 3
+ errint = EKX_writeline(sensorname[], sendtext[i].s[])
+ IF errint == eioc_error THEN
+    HALT
+ ENDIF
+ENDFOR
+
+errint = EKX_write(sensorname[], sendtext[4].s[])
+IF errint == eioc_error THEN
+   HALT
+ENDIF
+errint = EKX_write(sensorname[], sendtext[5].s[])
+IF errint == eioc_error THEN
+   HALT
+ENDIF
+
+FOR i=6 TO 8
+ errint = EKX_writeline(sensorname[], sendtext[i].s[])
+ IF errint == eioc_error THEN
+    HALT
+ ENDIF
+ENDFOR
+
+counter = counter + 1
+sendtext[5].s[] = "0"
+offset = 0
+SWRITE(sendtext[5].s[], state,offset,"%d",counter)
+;ENDFOLD
+
+;FOLD Holdon
+IF holdon == TRUE THEN
+ HALT
+ENDIF
+;ENDFOLD
+; The server program get the data and reply with a dataset
+; Next commands get the data from the stacks and filled the KRC variables
+; Open the FOLD and take a look at: get frame...
+;FOLD Get Data from stack, only if there are new values
+errbl = EKX_WaitForSensorData(0, rectext[11].s[], 10000)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+; get string
+dummy = rectext[1]
+errbl = EKX_GetStringElement(0, dummy.s[], bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+;get position
+FOR i=1 TO 3
+ errbl = EKX_GetRealElement(0, rectext[1+i].s[], position[i], bNew)
+ IF errbl == FALSE THEN
+   HALT
+ ENDIF
+ENDFOR
+; get temperature
+errbl = EKX_GetRealElement(0, rectext[5].s[], cpu, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+errbl = EKX_GetRealElement(0, rectext[6].s[], fan, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+; get Ints
+errbl = EKX_GetIntegerElement(0, rectext[7].s[], astate, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+errbl = EKX_GetIntegerElement(0, rectext[8].s[], bstate, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+; get bool
+errbl = EKX_GetBoolElement(0, rectext[9].s[], cstate, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+; get frame until the stack is empty! 
+bNew = TRUE
+WHILE bNew == TRUE
+    errbl = EKX_GetFrameElement( 0,  rectext[10].s[], extframe, bNew)
+	IF errbl == FALSE THEN
+	   HALT
+	ENDIF
+    ;FOLD Holdon
+    IF holdon == TRUE THEN
+     HALT
+    ENDIF
+    ;ENDFOLD
+    ; Take a look in the view of variables and show extframe
+    ; Recognise the OUT[1] is setted
+ENDWHILE
+;ENDFOLD
+
+;FOLD Holdon
+IF holdon == TRUE THEN
+ HALT
+ELSE
+ WAIT SEC seconds
+ENDIF
+;ENDFOLD
+; Check the variables position[], cpu, fan, astate, bstate and cstate 
+; There should be new values inside
+; The server is ready to expect data from the robot
+; Secon way to send data
+; Therefore we have to use the predefined XML document SampleSensor+.XML
+;Fold Send data by using predefined XML document
+errint = EKX_WriteReal("Mateusz.Robot.Data.ActPos.X", $pos_act.x)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.Data.ActPos.Y", $pos_act.y)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.Data.ActPos.Z", $pos_act.z)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.Data.ActPos.A", $pos_act.a)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.Data.ActPos.B", $pos_act.b)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.Data.ActPos.C", $pos_act.c)
+EKX_handleerror(errint)
+errint = EKX_WriteString("Mateusz.Robot.Data.LastPos.X", "0.1")
+EKX_handleerror(errint)
+errint = EKX_WriteInteger("Mateusz.Robot.Data.LastPos.Y", 15)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.Data.LastPos.Z", 24.3)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.Data.LastPos.A", 1.4575468)
+EKX_handleerror(errint)
+errint = EKX_WriteString("Mateusz.Robot.Data.LastPos.B", "42.5")
+EKX_handleerror(errint)
+errint = EKX_WriteString("Mateusz.Robot.Data.LastPos.C", "51.6")
+EKX_handleerror(errint)
+sendtext[9].s[] = "*** ...Sending ***"
+errint = EKX_WriteString("Mateusz.Robot.Status", sendtext[9].s[])
+EKX_handleerror(errint)
+errint = EKX_WriteBool("Mateusz.Robot.Mode", $peri_rdy)
+EKX_handleerror(errint)
+errint = EKX_WriteString("Mateusz.Robot.Complex.Tickcount", sendtext[5].s[])
+EKX_handleerror(errint)
+; Send document
+errint = EKX_Send("Mateusz")
+EKX_handleerror(errint)
+;ENDFOLD
+
+;FOLD Holdon
+IF holdon == TRUE THEN
+ HALT
+ELSE
+ WAIT SEC seconds
+ENDIF
+;ENDFOLD
+; The whole document SampleSensor+.xml is sent yet.
+; It's possible to send a part of the loaded document too.
+;FOLD Send part of document
+errint = EKX_WriteString("Mateusz.Robot.RobotType.Robot.Type", "KUKA")
+EKX_handleerror(errint)
+errint = EKX_WriteInteger("Mateusz.Robot.RobotType.Robot.Serial", 9861432)
+EKX_handleerror(errint)
+errint = EKX_Send("Mateusz.Robot.RobotType.Robot")
+EKX_handleerror(errint)
+;ENDFOLD
+
+; Get Data
+;FOLD Get Data from stack, only if there are new values
+errbl = EKX_WaitForSensorData(0,rectext[11].s[], 10000)
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+; get string
+dummy = rectext[1]
+errbl = EKX_GetStringElement(0, dummy.s[], bNew)
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+;get position
+FOR i=1 TO 3
+ errbl = EKX_GetRealElement(0, rectext[1+i].s[], position[i], bNew)
+ IF errbl == FALSE THEN
+   HALT
+ ENDIF
+ENDFOR
+; get temperature
+errbl = EKX_GetRealElement(0, rectext[5].s[], cpu, bNew)
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+errbl = EKX_GetRealElement(0, rectext[6].s[], fan, bNew)
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+; get Ints
+errbl = EKX_GetIntegerElement(0, rectext[7].s[], astate, bNew)
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+errbl = EKX_GetIntegerElement(0, rectext[8].s[], bstate, bNew)
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+; get bool
+errbl = EKX_GetBoolElement(0, rectext[9].s[], cstate, bNew)
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+
+; get frame until the stack is empty
+bNew = TRUE
+WHILE bNew == TRUE
+    errbl = EKX_GetFrameElement( 0,  rectext[10].s[], extframe, bNew)
+	IF errbl == FALSE THEN
+	  HALT
+	ENDIF 
+ENDWHILE
+
+;ENDFOLD
+ENDWHILE
+
+;FOLD At the end the channel have to be closed
+errbl = EKX_close(sensorname[])
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+;ENDFOLD
+
+END

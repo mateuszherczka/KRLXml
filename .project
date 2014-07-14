@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>KRLXml</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+	</buildSpec>
+	<natures>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>Src</name>
+			<type>2</type>
+			<location>/Users/mh/Google Drive/Kuka/KRL/Src</location>
+		</link>
+		<link>
+			<name>Xml</name>
+			<type>2</type>
+			<location>/Users/mh/Google Drive/Kuka/KRL/Xml</location>
+		</link>
+	</linkedResources>
+</projectDescription>
