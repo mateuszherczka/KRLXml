@@ -10,6 +10,11 @@
 	</natures>
 	<linkedResources>
 		<link>
+			<name>Other</name>
+			<type>2</type>
+			<location>/Users/mh/Google Drive/Kuka/KRL/Other</location>
+		</link>
+		<link>
 			<name>Src</name>
 			<type>2</type>
 			<location>/Users/mh/Google Drive/Kuka/KRL/Src</location>

@@ -1,8 +1,8 @@
 &ACCESS RVP
-&REL 56
+&REL 5
 &PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
 &PARAM EDITMASK = *
-DEF mh_ptp( )
+DEF mh_lin( )
 ;FOLD INI
 STRUC str char s[81]
 DECL str sendtext[9]
@@ -69,7 +69,7 @@ cstate = FALSE
 holdon = FALSE
 seconds = 1
 
-velocity = 30
+velocity = 10
 running = TRUE
 in_tick = 0
 out_tick = 0
@@ -165,7 +165,7 @@ out_message_id = 1
 $TIMER[1] = 0
 $TIMER_STOP[1]=FALSE
 
-$APO.CPTP=20
+$APO.CDIS=20
 
 my_robot_status = 1
 WHILE running == TRUE
@@ -214,9 +214,9 @@ ENDIF
 
 ; // TODO: Now we have the new data, here we move!
 
-BAS(#PTP_PARAMS,velocity)
+;BAS(#CP_PARAMS,velocity)
 ;ENDFOLD
-PTP extframe C_PTP
+LIN extframe C_DIS
 
 ;FOLD Holdon (is this necessary?)
 

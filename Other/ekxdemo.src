@@ -1,0 +1,205 @@
+&ACCESS RVP
+&REL 219
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEF ekxdemo( )
+;FOLD INI
+STRUC str char s[81]
+DECL str sendtext[14]
+DECL str rectext[5]
+DECL char sensorname[40]
+DECL str dummy
+BOOL errbl
+BOOL brk
+INT  errint
+INT i
+INT counter
+BOOL holdon
+INT  seconds
+
+REAL  velocity
+INT   motionmode
+FRAME extframe
+
+BOOL cstate
+BOOL bNew
+
+INT offset
+
+DECL STATE_T state
+
+  ;FOLD BASISTECH INI
+    GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+    INTERRUPT ON 3
+    BAS (#INITMOV,0 )
+  ;ENDFOLD (BASISTECH INI)
+  ;FOLD USER INI
+    ;Make your modifications here
+
+;drive to home position (ptp)
+  ;ENDFOLD (USER INI)
+;ENDFOLD (INI)
+
+
+
+;FOLD PTP HOME  Vel= 25 % DEFAULT;%{PE}%R 5.4.33,%MKUKATPBASIS,%CMOVE,%VPTP,%P 1:PTP, 2:HOME, 3:, 5:25, 7:DEFAULT
+$BWDSTART=FALSE
+PDAT_ACT=PDEFAULT
+FDAT_ACT=FHOME
+BAS(#PTP_PARAMS,25)
+$H_POS=XHOME
+PTP XHOME 
+;ENDFOLD
+;just for initializaton (lin)
+;FOLD LIN HOME  Vel= 0.1 m/s CPDAT3;%{PE}%R 5.4.33,%MKUKATPBASIS,%CMOVE,%VLIN,%P 1:LIN, 2:HOME, 3:, 5:0.1, 7:CPDAT3
+LDAT_ACT=LCPDAT3
+;ENDFOLD
+
+;FOLD Initial variables
+brk = FALSE
+counter = 0
+cstate = FALSE
+
+holdon = FALSE
+seconds = 1
+;ENDFOLD
+;FOLD Build Dataset to send and receive
+; send structure
+sendtext[1].s[] = "<Robot>"
+FOR i = 2 TO 13
+  sendtext[i].s[] = "0.000000"
+ENDFOR
+sendtext[14].s[] = "</Robot>"
+
+; receive structure
+rectext[1].s[] = "SiriusRemote.SiriusRobotControl.TString"
+rectext[2].s[] = "SiriusRemote.SiriusRobotControl.Motion.Velocity"
+rectext[3].s[] = "SiriusRemote.SiriusRobotControl.Motion.MotionMode"
+rectext[4].s[] = "SiriusRemote.SiriusRobotControl.Frames.XFrame"
+rectext[5].s[] = "SiriusRemote.SiriusRobotControl"
+;ENDFOLD
+;FOLD DECLare sensorname and open channel SampleSensor
+sensorname[]="SiriusRemote"
+errint = EKX_open(sensorname[])
+EKX_handleerror(errint)
+
+;ENDFOLD
+WHILE cstate == FALSE
+ 
+;FOLD Holdon
+IF holdon == TRUE THEN
+ HALT
+;ELSE
+ ;WAIT SEC seconds
+ENDIF
+;ENDFOLD
+; The channel SiriusRemote is open and the server expect data from robot
+; There are 2 ways to send data
+; The first one:
+;FOLD Send Data by using easy send commands
+FOR i=1 TO 14
+ errint = EKX_writeline(sensorname[], sendtext[i].s[])
+ IF errint == eioc_error THEN
+    HALT
+ ENDIF
+ENDFOR
+
+counter = counter + 1
+;sendtext[5].s[] = "0"
+offset = 0
+;SWRITE(sendtext[5].s[], state,offset,"%d",counter)
+SWRITE(sendtext[2].s[], state,offset,"%f\n",$pos_act.X)
+offset = 0
+SWRITE(sendtext[3].s[], state,offset,"%f\n",$pos_act.Y)
+offset = 0
+SWRITE(sendtext[4].s[], state,offset,"%f\n",$pos_act.Z)
+offset = 0 
+SWRITE(sendtext[5].s[], state,offset,"%f\n",$pos_act.A)
+offset = 0
+SWRITE(sendtext[6].s[], state,offset,"%f\n",$pos_act.B)
+offset = 0
+SWRITE(sendtext[7].s[], state,offset,"%f\n",$pos_act.C)
+offset = 0
+;ENDFOLD
+SWRITE(sendtext[8].s[], state,offset,"%f\n",$axis_act.a1)
+offset = 0
+SWRITE(sendtext[9].s[], state,offset,"%f\n",$axis_act.a2)
+offset = 0
+SWRITE(sendtext[10].s[], state,offset,"%f\n",$axis_act.a3)
+offset = 0 
+SWRITE(sendtext[11].s[], state,offset,"%f\n",$axis_act.a4)
+offset = 0
+SWRITE(sendtext[12].s[], state,offset,"%f\n",$axis_act.a5)
+offset = 0
+SWRITE(sendtext[13].s[], state,offset,"%f\n",$axis_act.a6)
+
+;FOLD Holdon
+IF holdon == TRUE THEN
+ HALT
+ENDIF
+;ENDFOLD
+; The server program get the data and reply with a dataset
+; Next commands get the data from the stacks and filled the KRC variables
+; Open the FOLD and take a look at: get frame...
+;FOLD Get Data from stack, only if there are new values
+errbl = EKX_WaitForSensorData(0, rectext[5].s[], 10000)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+; get string
+dummy = rectext[1]
+errbl = EKX_GetStringElement(0, dummy.s[], bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+;get velocity
+errbl = EKX_GetRealElement(0, rectext[2].s[], velocity, bNew)
+ IF errbl == FALSE THEN
+   HALT
+ ENDIF
+; get motion mode
+errbl = EKX_GetIntegerElement(0, rectext[3].s[], motionmode, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+; get frame until the stack is empty! 
+bNew = TRUE
+WHILE bNew == TRUE
+    errbl = EKX_GetFrameElement( 0,  rectext[4].s[], extframe, bNew)
+	IF errbl == FALSE THEN
+	   HALT
+	ENDIF
+ IF bNew == TRUE THEN
+   SWITCH motionmode 
+     CASE 0
+       BAS(#PTP_PARAMS, velocity)
+       PTP extframe
+     CASE 1
+       BAS(#CP_PARAMS, velocity)
+       LIN extframe
+     CASE 2
+       ;CIRC extframe, CA 260 C_ORI
+     DEFAULT
+       PTP extframe
+   ENDSWITCH
+ ENDIF
+    ;FOLD Holdon
+    IF holdon == TRUE THEN
+     HALT
+    ENDIF
+    ;ENDFOLD
+    ; Take a look in the view of variables and show extframe
+    ; Recognise the OUT[1] is setted
+ENDWHILE
+;ENDFOLD
+ENDWHILE
+
+;FOLD At the end the channel have to be closed
+errbl = EKX_close(sensorname[])
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+;ENDFOLD
+
+
+END

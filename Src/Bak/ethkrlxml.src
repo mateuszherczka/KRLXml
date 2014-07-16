@@ -1,0 +1,1236 @@
+&ACCESS RP1
+&REL 96
+DEF EthKRLXML( )
+;************************************************************
+;creation date:   02.08.2005
+;CopyRight:       KUKA Roboter GmbH 2006
+;last modified:   21.12.2006
+;prefix:          EKX
+;functions:       Interface between KRL and Ethernet (non Realtime)
+;                 This file is mainly designed to communicate
+;                 with external devices like sensors, vision
+;                 systems, other controllers and so on. The
+;                 basic idea is that the data exchange works
+;                 on XML strings.
+;************************************************************
+END
+ 
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_Action
+; NAME:         EKX_Action
+; DESCRIPTION:  Library internal Interface. Do not use this
+;               Function!
+; NOTES:        Library internal Interface. Do not use this
+;               Function!
+; ===========================================================
+DEFFCT INT EKX_Action(iAction:IN, iPar[]:OUT, rPar[]:OUT, string:OUT )
+  INT iAction
+  INT iPar[]
+  REAL rPar[]
+  DECL CHAR string[]
+  INT iStatus
+  DECL CHAR strFctName[16]
+
+  IF STRCOPY(strFctName[],"cAction") THEN
+    iPar[1] = iAction
+    iStatus = EXECFUNC(strFctName[], iPar[], rPar[], string[])
+  ENDIF
+  RETURN iStatus
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_Open
+; NAME:  		EKX_Open
+; USAGE:	  	INT EKX_Open(strSensorName[])
+; DESCRIPTION:  Opens and initializes a channel defined
+;  in the file XmlApiConfig.xml. Call this function before
+;  you use any other command.
+; PARAMETERS:  CHAR strSensorName[]: The sensor name
+; RESULT
+;  Possible error causes are described below
+;  but there can be more than these.
+;  * eIOC_ERROR
+;   -Are you using the right port number?
+;   -Did you create the coresbonding
+;    element file.
+;    E.g.: CamA.XML, StackDemo.XML, ...
+;  * eIOC_ELEMENT_INIT_ERROR
+;   -Check your element file.
+;    E.g.: CamA.XML, StackDemo.XML, ...
+;  * eIOC_IO_DEVICE_ERROR
+;   -Are you using the right IP and Port.
+;    Check XMLCommunicationSetup.xml and
+;    your sensor
+;   -Check if the DVT Ethernet Terminal
+;    controller is running (DVT Sensor only)
+;   -Can you ping your sensor anywhere in
+;    in the LAN
+;  * eIOC_ERR_IS_ALREADY_OPEN
+;   -This Channel is already open. You do not
+;    need to reopen it.
+;  * eIOC_CONFIGURATION_ERROR
+;   -Check the KRL program and
+;    XmlApiConfig.xml if the sensor
+;    names are matching
+;  * eIOC_IS_NOT_OPEN
+;   -Up to now just used internally.
+;  * eIOC_IS_OPEN
+;   -The channel now open. Every thing is ok!
+; NOTES
+;  Opening and closing the communication
+;  continuously makes no sense! It will always
+;  slow down the system. Open it once and leave
+;  it open. Consider this in your software
+;  design.
+;  See function EKX_HandleError() to handle
+;  errors
+; ===========================================================
+GLOBAL DEFFCT INT EKX_Open(strSensorName[]:IN)
+  DECL CHAR strSensorName[]
+  INT iStatus
+
+  iStatus = EKX_Action(eDIRECT_OPEN, iDummy[], rDummy[], strSensorName[])
+  LOOP
+    SWITCH iStatus
+      CASE eIOC_IS_NOT_OPEN
+      CASE eIOC_IS_OPEN
+        RETURN eIOC_IS_OPEN
+      DEFAULT
+        ; Probably an error occurred.
+        RETURN iStatus
+    ENDSWITCH
+    ; ask if channel is open
+    iStatus = EKX_Action(eIS_CHANNEL_OPEN, iDummy[], rDummy[], strSensorName[])
+    CONTINUE
+    WAIT SEC 0.05 ; "Wait until channel is open"
+  ENDLOOP
+  RETURN eIOC_ERROR
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_HandleError
+; NAME:  		EKX_HandleError
+; USAGE:		EKX_HandleError(iStatus:IN)
+; DESCRIPTION:  Display and handle KRL-XML-API-Errors.
+; PARAMETERS:   INT iStatus: error value to handle
+; RESULT:		None
+; NOTES:	    up to now handles just errors of the
+;  				EKX_Open() function
+; ===========================================================
+GLOBAL DEF EKX_HandleError(iStatus:IN)
+  INT iStatus
+  DECL INT iOffset
+  DECL STATE_T state
+  DECL MSG_T msgError
+  DECL MSG_T msgExit
+  
+SWITCH iStatus
+CASE 4
+CASE 1
+CASE 3
+
+DEFAULT
+
+	  
+	  iOffset=0
+
+	  ;Preload error message structure with default values
+	  msgError={MSG_T: VALID FALSE,RELEASE FALSE,TYP #NOTIFY,MODUL[] "EKX",KEY[] "-",PARAM_TYP #VALUE,PARAM[] " ",DLG_FORMAT[] " ",ANSWER 0}
+
+	  msgError.TYP=#QUIT
+	  
+	  SWITCH iStatus
+		CASE eINS_No_sendXMLdefined
+			msgError.KEY[]="No_XML_document_defined"
+
+		CASE eINS_No_root_node
+			msgError.KEY[]="Rootnode_not_correct"
+
+		CASE eINS_No_children_node
+			msgError.KEY[]="Node_not_found:Child"
+
+		CASE eINS_No_next_node
+			msgError.KEY[]="Node_not_found:Next"
+
+		CASE eINS_No_attribute_setted
+			msgError.KEY[]="Set attribute not possible"
+
+		CASE eINS_No_text_node
+			msgError.KEY[]="No_text_node_found"
+
+		CASE eINS_Cant_insert_here
+			msgError.KEY[]="Insert_not_possible"
+
+	    CASE eIOC_IS_NOT_OPEN
+	      msgError.KEY[]="Channel_is_not_Open"
+
+	    CASE eIOC_IS_OPEN
+	      msgError.TYP=#NOTIFY
+	      msgError.KEY[]="Channel_is_Open"
+
+	    CASE eIOC_ERROR
+	      msgError.KEY[]="General_Error"
+
+	    CASE eIOC_ELEMENT_INIT_ERROR
+	      msgError.KEY[]="Error_in_element_file"
+
+	    CASE eIOC_IO_DEVICE_ERROR
+	      msgError.KEY[]="Device_Error_Check_IP_and_Port_Number"
+
+	    CASE eIOC_ERR_IS_ALREADY_OPEN
+	      msgError.TYP=#NOTIFY
+	      msgError.KEY[]="Channel_is_already_Open"
+
+	    CASE eIOC_CONFIGURATION_ERROR
+	      msgError.KEY[]="Configuration_Error_Check_if_sensor_names_are_matching"
+
+	    DEFAULT
+	      msgError.KEY[]="Unkown_error"
+	  ENDSWITCH
+
+	  $MSG_T =  msgError
+
+	  $MSG_T.PARAM_TYP=#VALUE
+
+	  ;Show the message
+	  $MSG_T.VALID=TRUE
+
+	  ;Wait for quit button
+	  WHILE  $MSG_T.VALID
+	    WAIT SEC 0.05
+	  ENDWHILE
+	  WAIT SEC 0.2
+
+	  IF $MSG_T.TYP==#QUIT THEN
+	    WHILE (1==1)
+	      msgExit={MSG_T: VALID FALSE,RELEASE FALSE,TYP #QUIT,MODUL[] "EKX",KEY[] "Stop_and_reset_program!",PARAM_TYP #VALUE,PARAM[] " ",DLG_FORMAT[] " ",ANSWER 0}
+
+	      $MSG_T=msgExit
+	      $MSG_T.PARAM_TYP=#VALUE
+
+	      ;Show the message
+	      $MSG_T.VALID=TRUE
+
+	      ;Wait for quit button
+	      WHILE  $MSG_T.VALID
+	        WAIT SEC 0.05
+	      ENDWHILE
+	      WAIT SEC 0.2
+	    ENDWHILE
+	  ENDIF
+	ENDSWITCH
+END
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_Close
+; NAME:			EKX_Close
+; USAGE:  		BOOL EKX_Close(strSensorName:IN)
+; DESCRIPTION:	Close a Channel.
+; PARAMETERS:	CHAR strSensorName[]: The sensor name
+; RESULT:	  	TRUE: 	Success
+;  				FALSE:  Error
+; NOTES:  		Up to now the function always returns TRUE
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_Close(strSensorName:IN)
+  DECL CHAR strSensorName[]
+  INT iStatus
+
+  iStatus = EKX_Action(eDIRECT_CLOSE, iDummy[], rDummy[], strSensorName[])
+  RETURN TRUE
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_Write
+; NAME:			EKX_Write
+; USAGE:		INT EKX_Write(strSensorName[]:IN, strOut:IN)
+; DESCRIPTION:	Writes a String to a channel
+; PARAMETERS:  	CHAR strSensorName[]: The sensor name.
+;  				CHAR strOut[]: String to write.
+; RESULT:  		eIOC_ERROR on error
+; ===========================================================
+GLOBAL DEFFCT INT EKX_Write(strSensorName[]:IN, strOut[]:IN)
+  DECL CHAR strSensorName[]
+  DECL CHAR strOut[]
+  INT iErr, iPar[2]
+  DECL CHAR strWrite[81]
+
+  IF STRCOPY(strWrite[],strSensorName[]) THEN
+    IF STRADD(strWrite[],".")>0 THEN
+      iPar[2]=STRADD(strWrite[],strOut[])
+
+      iPar[1]=0         ; former iChannelId
+      iErr = EKX_Action(eWRITE_STRING, iPar[], rDummy[], strWrite[])
+    ENDIF
+  ENDIF
+  RETURN iErr
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_WriteLine
+; NAME:			EKX_WriteLine
+; USAGE:	  	INT EKX_Write(strSensorName:IN, strOut:IN)
+; DESCRIPTION:  Writes a String to an channel and sends an EOL. (#13+#10)
+; PARAMETERS:  	CHAR strSensorName[]: The sensor name.
+;  				CHAR strOut[]: String to write.
+; RESULT:  		eIOC_ERROR on an error
+; ===========================================================
+GLOBAL DEFFCT INT EKX_WriteLine(strSensorName[]:IN, strOut[]:IN)
+  DECL CHAR strSensorName[]
+  DECL CHAR strOut[]
+  INT iErr, iPar[2]
+  DECL CHAR strWrite[81]
+  DECL CHAR strEol[81]
+
+  strEol[1]=13
+  strEol[2]=10
+
+  IF STRCOPY(strWrite[],strSensorName[]) THEN
+    IF STRADD(strWrite[],".")>0 THEN
+      IF STRADD(strWrite[],strOut[])>0 THEN
+        iPar[2]=STRADD(strWrite[],strEol[])
+        iPar[1]=0         ; former iChannelId
+        iErr = EKX_Action(eWRITE_STRING, iPar[], rDummy[], strWrite[])
+      ENDIF
+    ENDIF
+  ENDIF
+  RETURN(iErr)
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetNextElementName
+; NAME:			EKX_GetNextElementName
+; USAGE:
+; DESCRIPTION:  This Function pops strings from the buffer.
+;  The strings are the element names in the
+;  order they came in. Use this function when
+;  you have to be sure about the order of the
+;  incoming elements.
+; PARAMETERS:	CHAR strSensorName[]: The sensor name.
+;  				CHAR cNameStr[]:
+;    			This parameter will be loaded with a
+;    			element name from the buffer.
+; RESULT:  		eIOC_ERROR on an error
+; ===========================================================
+GLOBAL DEFFCT INT EKX_GetNextElementName(strSensorName[]:IN, strNext[]:OUT)
+  DECL CHAR strSensorName[]
+  DECL CHAR strNext[]
+  DECL CHAR string[81]
+  INT iErr, iPar[2]
+  BOOL bErr
+
+  iPar[2]=0 ; string size
+
+  IF STRCOPY(string[],strSensorName[]) THEN
+    iErr = EKX_Action(eGET_NEXT_ELEMENT_NAME, iPar[], rDummy[], string[])
+    IF iPar[2]==0 THEN
+      IF STRCOPY(strNext[]," ") THEN
+      ENDIF
+    ELSE
+      IF STRCOPY(strNext[],strSensorName[]) THEN
+        IF STRADD(strNext[],".")>0 THEN
+          IF STRADD(strNext[],string[])>0 THEN
+          ENDIF;add error
+        ENDIF;add error
+      ENDIF;copy error
+    ENDIF; return String empty
+  ENDIF;copy error
+  RETURN(iErr)
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetElement
+; NAME:			EKX_GetElement
+; USAGE:
+; DESCRIPTION:  Library internal Interface. Do not use this Function!
+;  But read its documentation. Because all the get functions are using the same return
+;  value (Result) and the same bNew Parameter.
+; PARAMETERS:  	INT iNextOrLast:
+;    Indicates if you want the last (1) value
+;    or the next (0) value from the stack.
+;    (0) first in first out
+;    (1) last in first out, but always the
+;        last. No down movement in the buffer!
+;        See also the bNew parameter 
+;  INT iElementType:
+;    			Indicates the element type.
+;    			Possible types are:
+;    			eSTRUCTTAGELEMENT
+;    			eBOOLELEMENT
+;    			eINTEGERELEMENT
+;    			eREALELEMENT
+;    			eSTRINGELEMENT
+;    			eSTRUCTTAGELEMENT
+;  CHAR string[]:
+;    The element name with the sensor name
+;    as prefix:
+;    E.g.:  CamA.Car.FindTires.Position.XPos
+;    It also returns the string element if
+;    iElementType was eSTRINGELEMENT.
+;    E.g.: "Sensor says: Hallo World"
+;  BOOL bNew:	TRUE, if the value is new,
+;    			FALSE, if it was read before.
+;    The values will be load in bNew after
+;    function return.
+;  BOOL bBoolElement:
+;    The returned value depends on
+;    iElementType
+;  INT iIntergerElement:
+;    The returned value depends on
+;    iElementType
+;  REAL rRealElement:
+;    The returned value depends on
+;    iElementType
+; RESULT:  		TRUE:
+;    No error while calling the funtion.
+;    The EKX is working normal and you
+;    are useing it accurate.
+;  				FALSE:
+;    This is a serious EKX internal error.
+;    This Error should normally only occur
+;    while setting up a Application.
+;    The error will be set for one buffer and
+;    will persist until the communication is
+;    closed.
+;    Best reaction this is to close the
+;    communication and stop the application
+;    immediately. The communication might still
+;    work, before you close it, so you can send
+;    an error to the Server if you want to.
+;    Possible causes:
+;    * Probably you tried to read from a buffer
+;      which is not defined in the element file.
+;      E.g.: CamA.XML, StackDemo.XML, ...
+;    * You are trying to get data form a buffer
+;      with the wrong data type.
+;      E.g.: Using EKX_GetBoolElement(..) on
+;      a Real.
+;    * The server sent a string which is
+;      not XML like.
+;    * The communication is down, the Server is
+;      dead, the Network is down or
+;      disconnected...
+; ===========================================================
+DEFFCT BOOL EKX_GetElement(iNextOrLast:IN, iElementType:IN, string[]:OUT, bNew:OUT, bBoolElement:OUT, iIntergerElement:OUT, rRealElement:OUT, frFrame:OUT)
+  INT iNextOrLast
+  INT iElementType
+  DECL CHAR string[]
+  BOOL bNew
+  BOOL bBoolElement
+  INT iIntergerElement
+  REAL rRealElement
+  FRAME frFrame
+
+  INT iStrLen_  ; length of the return string
+  INT iTrueStrLen
+  INT iNew
+  INT iBoolElement
+  ;INT iStructTagElement
+
+  INT iIndex
+
+  INT iRet
+
+  INT iPar[11]
+  REAL rPar[9]
+
+  ;iPar[1]=-100
+  iPar[2]=0; former iChannelId
+  iPar[3]=iNextOrLast
+  iPar[4]=iElementType
+  iPar[5]=0
+  iPar[6]=0
+  iPar[7]=0;iStrLen_
+  iPar[8]=0;iNew
+  iPar[9]=0;iBoolElement
+  iPar[10]=0;iIntergerElement
+  iPar[11]=0;iStructTagElement
+
+  rPar[1]=0; XPos
+  rPar[2]=0; YPos
+  rPar[3]=0; ZPos
+  rPar[4]=0; ARot
+  rPar[5]=0; BRot
+  rPar[6]=0; CRot
+  rPar[7]=0;
+  rPar[8]=0; rRealElement
+  rPar[9]=0;
+
+  iRet = EKX_Action(eGET_ELEMENT, iPar[], rPar[], string[])
+
+  IF iRet <> 0 THEN
+    IF STRCOPY(string[]," ")THEN
+    ENDIF
+    bNew=false
+    bBoolElement=false
+    iIntergerElement=0
+    rRealElement=0
+    RETURN FALSE
+  ENDIF
+
+  iStrLen_          = iPar[7]
+  iNew              = iPar[8]
+  iBoolElement      = iPar[9]
+  iIntergerElement  = iPar[10]
+  ;iStructTagElement = iPar[11]
+
+  frFrame.X = rPar[1]
+  frFrame.Y = rPar[2]
+  frFrame.Z = rPar[3]
+  frFrame.A = rPar[4]
+  frFrame.B = rPar[5]
+  frFrame.C = rPar[6]
+  rRealElement = rPar[8]
+
+  ;** Cast INT -> BOOL (0: FALSE)
+  bNew=(iNew<>0)
+  bBoolElement=(iBoolElement<>0)
+
+  IF iElementType == eSTRINGELEMENT THEN
+    ; get the true length of the string
+    iTrueStrLen = STRLEN(string[])
+    FOR iIndex = (iStrLen_+1) TO iTrueStrLen
+      string[iIndex] = 0
+    ENDFOR
+  ENDIF
+  RETURN(TRUE)
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetStructElement
+; NAME:			GetStructElement
+; USAGE:		BOOL EKX_GetStructElement(iNextOrLast:IN,
+;               strElementName:IN, bNew:OUT)
+; DESCRIPTION:  Returns TRUE or FALSE whether a new
+;  				Structure end tag was found. (bNew)
+;  				<Pos>
+;      			 <XPos>1.23</XPos>
+;      			 <YPos>1.23</YPos>
+;  				</Pos>
+;  				when the sytem has found a new </Pos> the
+;  				function returns TRUE for bNew
+; PARAMETERS:   INT iNextOrLast: See function GetElement(..)
+; 				CHAR strElementName[]:
+; 				 The element name with the sensor name as prefix:
+;      			 E.g.: CamA.Car.FindTires.Position
+;  				BOOL bNew:   See function EKX_GetElement(..)
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_GetStructElement(iNextOrLast:IN, strElementName[]:IN, bNew:OUT)
+  INT iNextOrLast
+  DECL CHAR strElementName[]
+  BOOL bNew
+  BOOL bResult
+
+  bResult = EKX_GetElement(iNextOrLast, eSTRUCTTAGELEMENT, strElementName[], bNew, bbDummy, iiDummy, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetBoolElement
+; NAME:			EKX_GetBoolElement
+; USAGE:		BOOL EKX_GetBoolElement(iNextOrLast:IN, strElementName[]:IN, bVal:OUT, bNew:OUT)
+; DESCRIPTION:  Gets an integer from the ring buffer which is assigned to strElementName[]
+; PARAMETERS:  	INT iNextOrLast: See function EKX_GetElement(..)
+;  				CHAR strElementName[]:
+;      			 The element name with the sensor name as prefix:
+;      			 E.g.: CamA.Car.FindTires.Yes
+;  				BOOL bVal: The bool return value
+;  				BOOL bNew: See function EKX_GetElement(..)
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_GetBoolElement(iNextOrLast:IN, strElementName[]:IN, bVal:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL CHAR strElementName[]
+  BOOL bVal
+  BOOL bNew
+
+  BOOL bResult
+
+  bResult=EKX_GetElement(iNextOrLast, eBOOLELEMENT, strElementName[], bNew, bVal, iiDummy, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetIntegerElement
+; NAME:
+; USAGE:  		BOOL EKX_GetIntegerElement(iNextOrLast:IN, strElementName[]:IN, iVal:OUT, bNew:OUT)
+; DESCRIPTION:  Gets an integer from the ring buffer which is assigned to cElementName[]
+; PARAMETERS:   INT iNextOrLast: See function EKX_GetElement(..)
+;  				CHAR strElementName[]: The element name with the sensor name as prefix:
+;      			 E.g.: CamA.Car.FindTires.NrOfTires
+;  				INT iVal: The integer return value
+;  				BOOL bNew: See function EKX_GetElement(..)
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_GetIntegerElement(iNextOrLast:IN, strElementName[]:IN, iVal:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL CHAR strElementName[]
+  INT iVal
+  BOOL bNew
+  BOOL bResult
+
+  bResult = EKX_GetElement(iNextOrLast, eINTEGERELEMENT, strElementName[], bNew, bbDummy, iVal, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetRealElement
+; NAME:			EKX_GetRealElement
+; USAGE:		BOOL EKX_GetRealElement(iNextOrLast:IN, strElementName[]:IN, rVal:OUT, bNew:OUT)
+; DESCRIPTION:  Gets a real from the ring buffer which is assigned to strElementName[].
+; PARAMETERS:   INT iNextOrLast: See function EKX_GetElement(..)
+;  				CHAR strElementName[]:The element name with the sensor nameas prefix:
+;    			  E.g.: CamA.Car.FindTires.Position.XPos
+;  				REAL rVal: The real return value
+; 				BOOL bNew: See function EKX_GetElement(..)
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_GetRealElement(iNextOrLast:IN, strElementName[]:IN, rVal:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL CHAR strElementName[]
+  REAL rVal
+  BOOL bNew
+  BOOL bResult
+
+  bResult = EKX_GetElement(iNextOrLast, eREALELEMENT, strElementName[], bNew, bbDummy, iiDummy, rVal, frDummy)
+  RETURN bResult
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetStringElement
+; NAME:			EKX_GetStringElement
+; USAGE:		BOOL GetStringElement(iNextOrLast:IN, strString[]:OUT, bNew:OUT)
+; DESCRIPTION:  Gets the a string from the ring buffer assigned to an element name
+; PARAMETERS:  	INT iNextOrLast: See function EKX_GetElement(..)
+;  				CHAR strString[]: See function EKX_GetElement(..)
+;  				BOOL bNew: See function EKX_GetElement(..)
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_GetStringElement(iNextOrLast:IN, strString[]:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL CHAR strString[]
+  BOOL bNew
+  BOOL bResult
+
+  bResult = EKX_GetElement(iNextOrLast, eSTRINGELEMENT, strString[], bNew, bbDummy, iiDummy, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_GetFrameElement
+; NAME: 		EKX_GetFrameElement
+; USAGE: 		BOOL EKX_GetFrameElement(iNextOrLast:IN, strElementName[]:IN, frFrame:OUT, bNew:OUT)
+; DESCRIPTION:  Gets a FRAME from the ring buffer which is assigned to strElementName[].
+; PARAMETERS: 	INT iNextOrLast: See function EKX_GetElement(..)
+;  				CHAR strElementName[]: The element name with the sensor name as prefix:
+;     			 E.g.: CamA.Car.FindTires.Position.XPos
+;  				FRAME frVal: The frame return value
+;  				BOOL bNew: See function EKX_GetElement(..)
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_GetFrameElement(iNextOrLast:IN, strElementName[]:IN, frFrame:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL CHAR strElementName[]
+  FRAME frFrame
+  BOOL bNew
+  BOOL bResult
+
+  bResult = EKX_GetElement(iNextOrLast, eFRAME, strElementName[], bNew, bbDummy, iiDummy, rrDummy, frFrame)
+  RETURN bResult
+ENDFCT
+
+; ===========================================================
+; ***f* EthernetKRLXML/EKX_WaitForSensorData
+; NAME:   		WaitForSensorData
+; USAGE: 		EKX_WaitForSensorData(strElementName[]:IN, iTimeOut:IN)
+; DESCRIPTION: 	Waits until a the end tag of an element is transferred. If this takes longer then the
+;   			time out time the function returns with an error.
+; PARAMETERS:	INT iNextOrLast: See function EKX_GetElement(..)
+;               CHAR strElementName[]: Element name to wait for.
+;   			INT iTimeOut: Time out in milli seconds (about).
+;     			 A value <=0 for iTimeOut cases the Function not to return because of a time out.
+; RESULT:		TRUE: End tag of element was transferred.
+;     			 No error while calling the function.
+;   			FALSE: Timeout or you tryed to read an element which is not defined in the element file.
+;     			 E.g.: CamA.XML, StackDemo.XML, ...
+; ===========================================================
+GLOBAL DEFFCT BOOL EKX_WaitForSensorData(iNextOrLast:IN,strElementName[]:IN, iTimeOut:IN)
+  DECL CHAR strElementName[]
+  INT iTimeOut
+  BOOL bErr
+  BOOL bNew
+  INT iCountTime
+  INT iTimeDelta
+  REAL fTimeDelta
+  INT iNextOrLast
+
+  iTimeDelta = 10
+  iCountTime = 0
+  fTimeDelta = iTimeDelta/1000.0
+
+  LOOP
+    IF iTimeOut>0 THEN
+      iCountTime=iCountTime+iTimeDelta
+      IF iCountTime>iTimeOut THEN
+        ; Time out
+        RETURN FALSE
+      ENDIF
+    ENDIF
+    bErr = EKX_GetStructElement(iNextOrLast, strElementName[], bNew);
+    IF bErr == FALSE THEN
+      ; Error while waiting for sensor data
+      RETURN FALSE
+    ENDIF
+    IF bNew == TRUE THEN
+      ; Element was found
+      RETURN TRUE
+    ENDIF
+    CONTINUE
+    WAIT SEC fTimeDelta
+  ENDLOOP
+ENDFCT
+
+; ===========================================================
+; NAME:   		EKX_WriteReal
+; USAGE: 		EKX_WriteReal(strSensorName[]:IN, value[]:IN)
+; DESCRIPTION: 	Writes a real value in the predefined XMLdocument.
+;				 The place is defined by string: Sensorname
+; PARAMETERS:	CHAR strSensorName[]: Element name to write in.
+;   			real value[]: Value to insert in XML Node
+; RESULT:		0:  No error while calling the function.
+;   			any: Error occured
+; ===========================================================
+GLOBAL DEFFCT INT EKX_WriteReal(strSensorName[]:IN, value:IN)
+  DECL CHAR strSensorName[]
+  DECL real value
+  DECL INT iErr, iPar[2]
+  DECL CHAR strWrite[81]
+  DECL STATE_T STATE
+  DECL CHAR dummy[81]
+  DECL CHAR dummy1[2]
+  DECL INT OFFSET
+
+  iErr = 1
+  dummy1[] = "%f"
+  OFFSET = 0
+  SWRITE (dummy[],STATE,OFFSET,dummy1[], value)
+
+  IF STRCOPY(strWrite[],strSensorName[]) THEN
+    IF STRADD(strWrite[],"=") > 0 THEN
+      iErr = STRADD(strWrite[],dummy[])
+      iPar[2] = 0
+      iPar[1] = 0         ; former iChannelId
+      iErr = EKX_Action(eWRITE, iPar[], rDummy[], strWrite[])
+    ENDIF
+  ENDIF
+  RETURN iErr
+ENDFCT
+; ===========================================================
+; NAME:   		EKX_WriteInteger
+; USAGE: 		EKX_WriteInteger(strSensorName[]:IN, value[]:IN)
+; DESCRIPTION: 	Writes a integer value in the predefined XMLdocument.
+;				 The place is defined by string: Sensorname
+; PARAMETERS:	CHAR strSensorName[]: Element name to write in.
+;   			INT value[]: Value to insert in XML Node
+; RESULT:		0:  No error while calling the function.
+;   			any: Error occured
+; ===========================================================
+GLOBAL DEFFCT INT EKX_WriteInteger(strSensorName[]:IN, value:IN)
+  DECL CHAR strSensorName[]
+  DECL INT value
+  DECL INT iErr, iPar[2]
+  DECL CHAR strWrite[81]
+  DECL STATE_T STATE
+  DECL CHAR dummy[81]
+  DECL CHAR dummy1[2]
+  DECL INT OFFSET
+
+  iErr = 1
+  dummy1[] = "%d"
+  OFFSET = 0
+  SWRITE (dummy[],STATE,OFFSET,dummy1[], value)
+
+  IF STRCOPY(strWrite[],strSensorName[]) THEN
+    IF STRADD(strWrite[],"=") > 0 THEN
+      iErr = STRADD(strWrite[],dummy[])
+      iPar[2] = 0
+      iPar[1] = 0         ; former iChannelId
+      iErr = EKX_Action(eWRITE, iPar[], rDummy[], strWrite[])
+    ENDIF
+  ENDIF
+  RETURN iErr
+ENDFCT
+; ===========================================================
+; NAME:   		EKX_WriteBool
+; USAGE: 		EKX_WriteBool(strSensorName[]:IN, value[]:IN)
+; DESCRIPTION: 	Writes a integer value in the predefined XMLdocument.
+;				 The place is defined by string: Sensorname
+; PARAMETERS:	CHAR strSensorName[]: Element name to write in.
+;   			Bool value[]: Value to insert in XML Node
+; RESULT:		0:  No error while calling the function.
+;   			any: Error occured
+; ===========================================================
+GLOBAL DEFFCT INT EKX_WriteBool(strSensorName[]:IN, value:IN)
+  DECL CHAR strSensorName[]
+  DECL BOOL value
+  DECL INT iErr, iPar[2]
+  DECL CHAR strWrite[81]
+  DECL STATE_T STATE
+  DECL CHAR dummy[81]
+  DECL CHAR dummy1[2]
+  DECL INT OFFSET
+
+  iErr = 1
+  dummy1[] = "%d"
+  OFFSET = 0
+  SWRITE (dummy[],STATE,OFFSET,dummy1[], value)
+
+  IF STRCOPY(strWrite[],strSensorName[]) THEN
+    IF STRADD(strWrite[],"=") > 0 THEN
+      iErr = STRADD(strWrite[],dummy[])
+      iPar[2] = 0
+      iPar[1] = 0         ; former iChannelId
+      iErr = EKX_Action(eWRITE, iPar[], rDummy[], strWrite[])
+    ENDIF
+  ENDIF
+  RETURN iErr
+ENDFCT
+; ===========================================================
+; NAME:   		EKX_WriteString
+; USAGE: 		EKX_WriteString(strSensorName[]:IN, value[]:IN)
+; DESCRIPTION: 	Writes a string value in the predefined XMLdocument.
+;				 The place is defined by string: Sensorname
+; PARAMETERS:	CHAR strSensorName[]: Element name to write in.
+;   			CHAR value[]: Value to insert in XML Node
+; RESULT:		0:  No error while calling the function.
+;   			any: Error occured
+; ===========================================================
+GLOBAL DEFFCT INT EKX_WriteString(strSensorName[]:IN, value:IN)
+  DECL CHAR strSensorName[]
+  DECL CHAR value[]
+  DECL INT iErr, iPar[2]
+  DECL CHAR strWrite[81]
+
+  iErr = 1
+
+  IF STRCOPY(strWrite[],strSensorName[]) THEN
+    IF STRADD(strWrite[],"=") > 0 THEN
+      iErr = STRADD(strWrite[], value[])
+      iPar[2] = 0
+      iPar[1] = 0         ; former iChannelId
+      iErr = EKX_Action(eWRITE, iPar[], rDummy[], strWrite[])
+    ENDIF
+  ENDIF
+  RETURN iErr
+ENDFCT
+; ===========================================================
+; NAME:     EKX_Send
+; USAGE:   EKX_Send(strSensorName[]:IN)
+; DESCRIPTION:  Send the channel
+; PARAMETERS: CHAR strSensorName[]: Channelname
+; RESULT:  0:  No error while calling the function.
+;                  any: Error occured
+; ===========================================================
+GLOBAL DEFFCT INT EKX_Send(strSensorName[]:IN)
+  DECL CHAR strSensorName[]
+
+  INT iErr, iPar[2]
+      iPar[1]=0         ; former iChannelId
+      iErr=EKX_Action(eSend, iPar[], rDummy[], strSensorName[])
+
+  RETURN iErr
+ENDFCT
+
+; ===========================================================
+; ===========================================================
+; Older XMLAPI commands
+; ===========================================================
+; ===========================================================
+; --- Former XMLAPI-Function for Compatibility ---
+DEFFCT INT xmlApiAction(iAction:IN, iPar[]:OUT, rPar[]:OUT, string:OUT )
+  INT iAction
+  INT iPar[]
+  REAL rPar[]
+  DECL ASTRING string
+
+  INT iStatus
+  DECL ASTRING strFctName
+
+  strFctName.s[]="cAction"
+  iPar[1]=iAction
+  iStatus=EXECFUNC(strFctName.s[], iPar[], rPar[], string.s[])
+  RETURN iStatus
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT INT xmlApiOpen(strSensorName:OUT)
+  DECL ASTRING strSensorName
+
+  INT iStatus
+
+  iStatus=xmlApiAction(eDIRECT_OPEN, iDummy[], rDummy[], strSensorName)
+  LOOP
+    SWITCH iStatus
+      CASE eIOC_IS_NOT_OPEN
+      CASE eIOC_IS_OPEN
+        RETURN eIOC_IS_OPEN
+      DEFAULT
+        ; Probably an error occurred.
+        RETURN iStatus
+    ENDSWITCH
+    ; ask if channel is open
+    iStatus=xmlApiAction(eIS_CHANNEL_OPEN, iDummy[], rDummy[], strSensorName)
+    CONTINUE
+    WAIT SEC 0.05 ; "Wait until channel is open"
+  ENDLOOP
+  RETURN eIOC_ERROR
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiGetFrameElement(iNextOrLast:IN, strElementName:OUT, frFrame:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL ASTRING strElementName
+  FRAME frFrame
+  BOOL bNew
+
+  BOOL bResult
+
+  bResult=xmlApiGetElement(iNextOrLast, eFRAME, strElementName, bNew, bbDummy, iiDummy, rrDummy, frFrame)
+  RETURN bResult
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiGetStringElement(iNextOrLast:IN, string:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL ASTRING string
+  BOOL bNew
+
+  BOOL bResult
+
+  bResult=xmlApiGetElement(iNextOrLast, eSTRINGELEMENT, string, bNew, bbDummy, iiDummy, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiGetIntegerElement(iNextOrLast:IN, strElementName:OUT, iVal:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL ASTRING strElementName
+  INT iVal
+  BOOL bNew
+
+  BOOL bResult
+
+  bResult=xmlApiGetElement(iNextOrLast, eINTEGERELEMENT, strElementName, bNew, bbDummy, iVal, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiGetRealElement(iNextOrLast:IN, strElementName:OUT, rVal:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL ASTRING strElementName
+  REAL rVal
+  BOOL bNew
+
+  BOOL bResult
+
+  bResult=xmlApiGetElement(iNextOrLast, eREALELEMENT, strElementName, bNew, bbDummy, iiDummy, rVal, frDummy)
+  RETURN bResult
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEF xmlApiHandleError(iStatus:IN)
+  INT iStatus
+
+  DECL INT iOffset
+  DECL STATE_T state
+  DECL MSG_T msgError
+  DECL MSG_T msgExit
+
+  iOffset=0
+
+  ;Preload error message structure with default values
+  msgError={MSG_T: VALID FALSE,RELEASE FALSE,TYP #NOTIFY,MODUL[] "XmlApi",KEY[] "-",PARAM_TYP #VALUE,PARAM[] " ",DLG_FORMAT[] " ",ANSWER 0}
+
+  msgError.TYP=#QUIT
+
+  SWITCH iStatus
+    CASE eIOC_IS_NOT_OPEN
+      msgError.KEY[]="Channel_is_not_Open"
+
+    CASE eIOC_IS_OPEN
+      msgError.TYP=#NOTIFY
+      msgError.KEY[]="Channel_is_Open"
+
+    CASE eIOC_ERROR
+      msgError.KEY[]="General_Error"
+
+    CASE eIOC_ELEMENT_INIT_ERROR
+      msgError.KEY[]="Error_in_element_file"
+
+    CASE eIOC_IO_DEVICE_ERROR
+      msgError.KEY[]="Device_Error_Check_IP_and_Port_Number"
+
+    CASE eIOC_ERR_IS_ALREADY_OPEN
+      msgError.TYP=#NOTIFY
+      msgError.KEY[]="Channel_is_already_Open"
+
+    CASE eIOC_CONFIGURATION_ERROR
+      msgError.KEY[]="Configuration_Error_Check_if_sensor_names_are_matching"
+
+    DEFAULT
+      msgError.KEY[]="Unkown_error"
+  ENDSWITCH
+
+  $MSG_T=msgError
+
+  $MSG_T.PARAM_TYP=#VALUE
+
+  ;Show the message
+  $MSG_T.VALID=TRUE
+
+  ;Wait for quit button
+  WHILE  $MSG_T.VALID
+    WAIT SEC 0.05
+  ENDWHILE
+  WAIT SEC 0.2
+
+  IF $MSG_T.TYP==#QUIT THEN
+    WHILE (1==1)
+      msgExit={MSG_T: VALID FALSE,RELEASE FALSE,TYP #QUIT,MODUL[] "XmlApi",KEY[] "Stop_and_reset_program!",PARAM_TYP #VALUE,PARAM[] " ",DLG_FORMAT[] " ",ANSWER 0}
+
+      $MSG_T=msgExit
+      $MSG_T.PARAM_TYP=#VALUE
+
+      ;Show the message
+      $MSG_T.VALID=TRUE
+
+      ;Wait for quit button
+      WHILE  $MSG_T.VALID
+        WAIT SEC 0.05
+      ENDWHILE
+      WAIT SEC 0.2
+    ENDWHILE
+  ENDIF
+END
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiClose(strSensorName:OUT)
+  DECL ASTRING strSensorName
+
+  INT iStatus
+
+  iStatus=xmlApiAction(eDIRECT_CLOSE, iDummy[], rDummy[], strSensorName)
+  RETURN TRUE
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiGetBoolElement(iNextOrLast:IN, strElementName:OUT, bVal:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL ASTRING strElementName
+  BOOL bVal
+  BOOL bNew
+
+  BOOL bResult
+
+  bResult=xmlApiGetElement(iNextOrLast, eBOOLELEMENT, strElementName, bNew, bVal, iiDummy, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiGetStructElement(iNextOrLast:IN, strElementName:OUT, bNew:OUT)
+  INT iNextOrLast
+  DECL ASTRING strElementName
+  BOOL bNew
+
+  BOOL bResult
+
+  bResult=xmlApiGetElement(iNextOrLast, eSTRUCTTAGELEMENT, strElementName, bNew, bbDummy, iiDummy, rrDummy, frDummy)
+  RETURN bResult
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+DEFFCT BOOL xmlApiGetElement(iNextOrLast:IN, iElementType:IN, string:OUT, bNew:OUT, bBoolElement:OUT, iIntergerElement:OUT, rRealElement:OUT, frFrame:OUT)
+  INT iNextOrLast
+  INT iElementType
+  DECL ASTRING string
+  BOOL bNew
+  BOOL bBoolElement
+  INT iIntergerElement
+  REAL rRealElement
+  FRAME frFrame
+
+  INT iStrLen_  ; length of the return string
+  INT iTrueStrLen
+  INT iNew
+  INT iBoolElement
+  ;INT iStructTagElement
+
+  DECL STATE_T state
+  CHAR cBuf[81]
+  INT iIndex
+
+  INT iRet
+
+  INT iPar[11]
+  REAL rPar[9]
+
+  ;iPar[1]=-100
+  iPar[2]=0; former iChannelId
+  iPar[3]=iNextOrLast
+  iPar[4]=iElementType
+  iPar[5]=0
+  iPar[6]=0
+  iPar[7]=0;iStrLen_
+  iPar[8]=0;iNew
+  iPar[9]=0;iBoolElement
+  iPar[10]=0;iIntergerElement
+  iPar[11]=0;iStructTagElement
+
+  rPar[1]=0; XPos
+  rPar[2]=0; YPos
+  rPar[3]=0; ZPos
+  rPar[4]=0; ARot
+  rPar[5]=0; BRot
+  rPar[6]=0; CRot
+  rPar[7]=0;
+  rPar[8]=0; rRealElement
+  rPar[9]=0;
+
+  iRet=xmlApiAction(eGET_ELEMENT, iPar[], rPar[], string)
+
+  IF iRet <> 0 THEN
+    string={ASTRING: s[] " "}
+    bNew=false
+    bBoolElement=false
+    iIntergerElement=0
+    rRealElement=0
+    RETURN FALSE
+  ENDIF
+
+  iStrLen_          = iPar[7]
+  iNew              = iPar[8]
+  iBoolElement      = iPar[9]
+  iIntergerElement  = iPar[10]
+  ;iStructTagElement = iPar[11]
+
+  frFrame.X = rPar[1]
+  frFrame.Y = rPar[2]
+  frFrame.Z = rPar[3]
+  frFrame.A = rPar[4]
+  frFrame.B = rPar[5]
+  frFrame.C = rPar[6]
+  rRealElement = rPar[8]
+
+  ;** Cast INT -> BOOL (0: FALSE)
+  bNew=(iNew<>0)
+  bBoolElement=(iBoolElement<>0)
+
+  IF iElementType==eSTRINGELEMENT THEN
+    iTrueStrLen=0
+    ; get the true length of the string
+    CONTINUE
+    SWRITE(cBuf[], state, iTrueStrLen, string.s[])
+    FOR iIndex=(iStrLen_+1) TO iTrueStrLen
+      string.s[iIndex]=0
+    ENDFOR
+  ENDIF
+  RETURN TRUE
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT INT xmlApiWrite(strChannelName:OUT, strOut:OUT)
+  DECL ASTRING strChannelName
+  DECL ASTRING strOut
+
+  DECL STATE_T state
+  INT iOffset
+  INT iErr, iPar[2]
+  DECL ASTRING strWrite
+
+  iOffset=0
+  strWrite={ASTRING: s[] " "}
+
+  CONTINUE
+  SWRITE(strWrite.s[], state, iOffset, "%s.%s", strChannelName.s[], strOut.s[])
+
+  iPar[1]=0         ; former iChannelId
+  iPar[2]=iOffset   ; iNrOfBytes
+
+  iErr=xmlApiAction(eWRITE_STRING, iPar[], rDummy[], strWrite)
+  RETURN iErr
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT BOOL xmlApiWaitForSensorData(strElementName:OUT, iTimeOut:IN)
+  DECL ASTRING strElementName
+  INT iTimeOut
+
+  BOOL bErr
+  BOOL bNew
+  INT iCountTime
+  INT iTimeDelta
+  REAL fTimeDelta
+
+  iTimeDelta=10
+  iCountTime=0
+  fTimeDelta=iTimeDelta/1000.0
+
+  LOOP
+    IF iTimeOut>0 THEN
+      iCountTime=iCountTime+iTimeDelta
+      IF iCountTime>iTimeOut THEN
+        ; Time out
+        RETURN FALSE
+      ENDIF
+    ENDIF
+    bErr=xmlApiGetStructElement(0, strElementName, bNew);
+    IF bErr==FALSE THEN
+      ; Error while waiting for sensor data
+      RETURN FALSE
+    ENDIF
+    IF bNew==TRUE THEN
+      ; Element was found
+      RETURN TRUE
+    ENDIF
+    CONTINUE
+    WAIT SEC fTimeDelta
+  ENDLOOP
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT INT xmlApiGetNextElementName(strChannelName:OUT, strNext:OUT)
+  DECL ASTRING strChannelName
+  DECL ASTRING strNext
+
+  DECL ASTRING strEmpty
+  DECL ASTRING string
+
+  DECL STATE_T state
+  INT iOffset
+  INT iErr, iPar[2]
+  BOOL bErr
+
+  iPar[2]=0 ; string size
+  strEmpty={ASTRING: s[] " "}
+  iOffset=0
+
+  string=strChannelName
+
+  iErr=xmlApiAction(eGET_NEXT_ELEMENT_NAME, iPar[], rDummy[], string)
+
+  strNext=strEmpty
+
+  iOffset=0
+  CONTINUE
+  SWRITE(strNext.s[], state, iOffset, "%s.%s", strChannelName.s[], string.s[])
+
+  IF iPar[2]==0 THEN
+      strNext=strEmpty
+  ENDIF
+  RETURN iErr
+ENDFCT
+; --- Former XMLAPI-Function for Compatibility ---
+GLOBAL DEFFCT INT xmlApiWriteLine(strChannelName:OUT, strOut:OUT)
+  DECL ASTRING strChannelName
+  DECL ASTRING strOut
+
+  DECL STATE_T state
+  INT iOffset
+  INT iErr, iPar[2]
+  DECL ASTRING strWrite
+  DECL ASTRING strEol
+
+  iOffset=0
+  strWrite={ASTRING: s[] " "}
+  strEol.s[1]=13
+  strEol.s[2]=10
+
+  CONTINUE
+  SWRITE(strWrite.s[], state, iOffset, "%s.%s%s", strChannelName.s[], strOut.s[], strEol.s[])
+
+  iPar[1]=0         ; former iChannelId
+  iPar[2]=iOffset   ; iNrOfBytes
+  iErr=xmlApiAction(eWRITE_STRING, iPar[], rDummy[], strWrite)
+  RETURN iErr
+ENDFCT
