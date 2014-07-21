@@ -38,7 +38,7 @@ INT	in_message_id
 INT	out_message_id
 INT timeout_ms
 INT my_robot_status
-INT mh_velocity
+REAL mh_velocity
 INT mh_framecount
 INT mh_frameloop_counter
 INT mh_tolerance
@@ -217,7 +217,7 @@ IF errbl == FALSE THEN
 ENDIF
 
 ; get vel
-errbl = EKX_GetIntegerElement(0, rectext[6].s[], mh_velocity, bNew)
+errbl = EKX_GetRealElement(0, rectext[6].s[], mh_velocity, bNew)
 IF errbl == FALSE THEN
    HALT
 ENDIF
