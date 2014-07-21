@@ -1,0 +1,361 @@
+&ACCESS RVP
+&REL 5
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEF mh_lin( )
+;FOLD INI
+STRUC str char s[81]
+DECL str sendtext[9]
+DECL str rectext[6]
+DECL char sensorname[40]
+DECL str dummy
+BOOL errbl
+BOOL brk
+INT  errint
+INT i
+INT counter
+FRAME extframe
+BOOL holdon
+INT seconds
+REAL velocity
+
+DECL real position[3]
+REAL cpu
+REAL fan
+INT astate
+INT bstate
+BOOL cstate
+BOOL bNew
+
+INT offset
+
+;My Vars
+BOOL running
+INT	in_tick
+INT	out_tick
+INT	motion_mode
+INT	in_message_id
+INT	out_message_id
+INT timeout_ms
+INT my_robot_status
+INT mh_velocity
+INT mh_framecount
+INT mh_frameloop_counter
+INT mh_tolerance
+
+DECL STATE_T state
+
+  ;FOLD BASISTECH INI
+    GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+    INTERRUPT ON 3
+    BAS (#INITMOV,0 )
+  ;ENDFOLD (BASISTECH INI)
+  
+  ;FOLD USER INI
+    ;Make your modifications here
+
+;move home
+;FOLD PTP HOME
+$BWDSTART=FALSE
+PDAT_ACT=PDEFAULT
+FDAT_ACT=FHOME
+BAS(#PTP_PARAMS,30)
+$H_POS=XHOME
+PTP XHOME
+;ENDFOLD
+  ;ENDFOLD (USER INI)
+;ENDFOLD (INI)
+
+;FOLD Initial variables
+brk = FALSE
+counter = 0
+cstate = FALSE
+holdon = FALSE
+seconds = 1
+
+velocity = 10
+running = TRUE
+in_tick = 0
+out_tick = 0
+errint = 0
+motion_mode = 0
+in_message_id = 0
+out_message_id = 0
+timeout_ms = 10000
+my_robot_status = 0
+mh_velocity = 200
+mh_framecount = 1
+mh_tolerance = 20
+;ENDFOLD
+
+;FOLD Build Dataset to send and receive
+; send structure
+sendtext[1].s[] = "<Robot>"
+sendtext[2].s[] = "<Status>Ready</Status>"
+sendtext[3].s[] = "<Error>0</Error>"
+sendtext[4].s[] = "<Mode>0</Mode"
+sendtext[5].s[] = "<Tick>0</Tick>"
+sendtext[6].s[] = "<Id>0</Id>"
+sendtext[7].s[] = "<ActPos X Y Z A B C />"
+sendtext[8].s[] = "</Robot>"
+
+; receive structure
+rectext[1].s[] = "Mateusz.ExternalData"
+rectext[2].s[] = "Mateusz.ExternalData.Mode"
+rectext[3].s[] = "Mateusz.ExternalData.Tick"
+rectext[4].s[] = "Mateusz.ExternalData.Id"
+rectext[5].s[] = "Mateusz.ExternalData.Run"
+rectext[6].s[] = "Mateusz.ExternalData.Vel"
+rectext[7].s[] = "Mateusz.ExternalData.Tol"
+rectext[8].s[] = "Mateusz.ExternalData.Frames"
+rectext[9].s[] = "Mateusz.ExternalData.XFrame"
+
+
+;ENDFOLD
+
+;FOLD DECLare sensorname and open channel
+sensorname[]="Mateusz"
+errint = EKX_open(sensorname[])
+EKX_handleerror(errint)
+
+
+
+;ENDFOLD
+ 
+;FOLD Wait (is this necessary?)
+
+WAIT SEC seconds
+
+;ENDFOLD
+
+
+; The channel is open and the server expect data from robot
+; This is the very first message - telling that robot is ready.
+
+;FOLD Send Data
+
+;sendtext[9].s[] = "Ready"
+errint = EKX_WriteInteger("Mateusz.Robot.Status", my_robot_status)
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Error", errint)
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Mode", motion_mode)
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Tick", out_tick)
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Id", out_message_id)
+EKX_handleerror(errint)
+
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", $pos_act.x)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", $pos_act.y)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", $pos_act.z)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", $pos_act.a)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
+EKX_handleerror(errint)
+
+; Send document
+errint = EKX_Send("Mateusz")
+EKX_handleerror(errint)
+
+;ENDFOLD
+
+; *** Main loop ***
+
+out_message_id = 1
+$TIMER[1] = 0
+$TIMER_STOP[1]=FALSE
+
+
+
+my_robot_status = 1
+WHILE running == TRUE
+
+; From now on robot waits for data, reads data and replies with status messages
+; If no message from server for timeout_ms, robot halts
+
+;FOLD Get Data from stack, only if there are new values
+
+; The 0 means that we want next, not last (see krlxml.src)
+; -1 means no timeout
+errbl = EKX_WaitForSensorData(0, rectext[1].s[], -1)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get mode
+errbl = EKX_GetIntegerElement(0, rectext[2].s[], motion_mode, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get tick
+errbl = EKX_GetIntegerElement(0, rectext[3].s[], in_tick, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get id
+errbl = EKX_GetIntegerElement(0, rectext[4].s[], in_message_id, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get running
+errbl = EKX_GetBoolElement(0, rectext[5].s[], running, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get vel
+errbl = EKX_GetIntegerElement(0, rectext[6].s[], mh_velocity, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+BAS(#CP_PARAMS,mh_velocity*0.001)
+
+; get tolerance
+errbl = EKX_GetIntegerElement(0, rectext[7].s[], mh_tolerance, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+$APO.CDIS=mh_tolerance
+
+; get framecount
+errbl = EKX_GetIntegerElement(0, rectext[8].s[], mh_framecount, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; ---------------------------------
+; get all frames in this trajectory
+FOR mh_frameloop_counter = 1 TO mh_framecount STEP 1
+
+; get frame
+errbl = EKX_GetFrameElement( 0,  rectext[9].s[], extframe, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; move
+LIN extframe C_DIS
+
+ENDFOR
+; ---------------------------------
+
+;ENDFOLD
+
+
+;FOLD Holdon (is this necessary?)
+
+;WAIT SEC seconds
+
+;ENDFOLD
+
+;Fold Send data report
+
+; This is report sent after robot move command is started
+; // TODO: We have to think about when this is sent
+; // TODO: Also if this interrupts motion (robotforum suggests use writestring)
+
+;sendtext[9].s[] = "Running"
+;errint = EKX_WriteInteger("Mateusz.Robot.Status", my_robot_status)
+;EKX_handleerror(errint)
+
+;errint = EKX_WriteInteger("Mateusz.Robot.Error", errint)
+;EKX_handleerror(errint)
+
+;errint = EKX_WriteInteger("Mateusz.Robot.Mode", motion_mode)
+;EKX_handleerror(errint)
+
+;errint = EKX_WriteInteger("Mateusz.Robot.Tick", $TIMER[1])
+;EKX_handleerror(errint)
+
+;errint = EKX_WriteInteger("Mateusz.Robot.Id", out_message_id)
+;EKX_handleerror(errint)
+
+;errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", extframe.x)
+;EKX_handleerror(errint)
+;errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", extframe.y)
+;EKX_handleerror(errint)
+;errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", extframe.z)
+;EKX_handleerror(errint)
+;errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", extframe.a)
+;EKX_handleerror(errint)
+;errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", extframe.b)
+;EKX_handleerror(errint)
+;errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", extframe.c)
+;EKX_handleerror(errint)
+
+; Send document
+;errint = EKX_Send("Mateusz")
+;EKX_handleerror(errint)
+
+;ENDFOLD
+
+out_message_id = out_message_id + 1
+
+ENDWHILE
+; End of main loop
+
+my_robot_status = 2
+
+; Final report
+
+;FOLD Send Data
+
+;sendtext[9].s[] = "Stopping"
+errint = EKX_WriteInteger("Mateusz.Robot.Status", my_robot_status)
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Error", errint)
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Mode", motion_mode)
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Tick", $TIMER[1])
+EKX_handleerror(errint)
+
+errint = EKX_WriteInteger("Mateusz.Robot.Id", out_message_id)
+EKX_handleerror(errint)
+
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", $pos_act.x)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", $pos_act.y)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", $pos_act.z)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", $pos_act.a)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
+EKX_handleerror(errint)
+
+; Send document
+errint = EKX_Send("Mateusz")
+EKX_handleerror(errint)
+
+;ENDFOLD
+
+
+;FOLD At the end the channel have to be closed
+errbl = EKX_close(sensorname[])
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+;ENDFOLD
+
+END

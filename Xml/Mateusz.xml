@@ -1,8 +1,11 @@
 <Elements>
-	<Element Tag="ExternalData" Type="STRUCTTAG" Stacksize="5" />
-	<Element Tag="ExternalData.Mode" Type="INTEGER" Stacksize="5" />
-	<Element Tag="ExternalData.Tick" Type="INTEGER" Stacksize="5" />
-	<Element Tag="ExternalData.Id" Type="INTEGER" Stacksize="5" />
-	<Element Tag="ExternalData.Run" Type="BOOLEAN" Stacksize="5" />
-	<Element Tag="ExternalData.Frame" Type="FRAME" Stacksize="5" />   
+	<Element Tag="ExternalData" Type="STRUCTTAG" Stacksize="50" />
+	<Element Tag="ExternalData.Mode" Type="INTEGER" Stacksize="50" />
+	<Element Tag="ExternalData.Tick" Type="INTEGER" Stacksize="50" />
+	<Element Tag="ExternalData.Id" Type="INTEGER" Stacksize="50" />
+	<Element Tag="ExternalData.Run" Type="BOOLEAN" Stacksize="50" />
+	<Element Tag="ExternalData.Vel" Type="Integer" Stacksize="50" />
+	<Element Tag="ExternalData.Tol" Type="Integer" Stacksize="50" />
+	<Element Tag="ExternalData.Frames" Type="Integer" Stacksize="50" />
+	<Element Tag="ExternalData.Frame" Type="FRAME" Stacksize="500" />   
 </Elements>
