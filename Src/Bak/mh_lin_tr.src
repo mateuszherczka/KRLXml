@@ -1,12 +1,12 @@
 &ACCESS RVP
-&REL 2
+&REL 5
 &PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
 &PARAM EDITMASK = *
-DEF mh_lin_tr( )
+DEF mh_lin( )
 ;FOLD INI
 STRUC str char s[81]
 DECL str sendtext[9]
-DECL str rectext[10]
+DECL str rectext[6]
 DECL char sensorname[40]
 DECL str dummy
 BOOL errbl
@@ -222,7 +222,7 @@ IF errbl == FALSE THEN
    HALT
 ENDIF
 
-;BAS(#CP_PARAMS,mh_velocity*0.001)
+BAS(#CP_PARAMS,mh_velocity*0.001)
 
 ; get tolerance
 errbl = EKX_GetIntegerElement(0, rectext[7].s[], mh_tolerance, bNew)

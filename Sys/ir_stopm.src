@@ -1,0 +1,71 @@
+&ACCESS  R
+&COMMENT HandlerOnRobotFault
+DEF  IR_STOPM ( )
+  ;---------------------------------
+  ; Error Handling ROBOT CONTROLER  
+  ; Switch OFF and Switch ON process
+  ;---------------------------------
+  ;FOLD DECLARATIONS
+    ;FOLD USER DECL
+    ; Please insert user defined declarations
+
+    ;ENDFOLD (USER DECL)
+    ;FOLD BASISTECH DECL
+      BOOL APPL_RUN_L,TMP_$STOPM
+      DECL CHAR ID[3]
+    ;ENDFOLD (BASISTECH DECL)
+ ;ENDFOLD (DECLARATIONS)
+ ;FOLD BASISTECH INIT
+     INTERRUPT OFF 3
+     STOPM_FLAG=TRUE
+     ID[]="CTL"
+     IF $STOPMESS==TRUE THEN
+       BRAKE
+     ENDIF
+  ;ENDFOLD (BASISTECH INIT) 
+  ;FOLD USER STOP
+  ;Make your modifications here
+
+  ;ENDFOLD (USER STOP)
+  ;FOLD BASISTECH STOP
+   IF $STOPMESS==TRUE THEN
+     TMP_$STOPM=TRUE
+     P00 (#EXT_ERR,#PGNO_GET,ID[],128 )
+     APPL_RUN_L=FALSE
+     IF (APPL_RUN>0) THEN
+      IF $OUT[APPL_RUN] THEN
+        APPL_RUN_L=TRUE
+        $OUT[APPL_RUN]=FALSE
+      ENDIF
+     ENDIF
+    REPEAT
+      POWER=SYNC()
+      HALT
+    UNTIL (($STOPMESS==FALSE) AND ($POWER_FAIL==FALSE))
+   ELSE
+    TMP_$STOPM=FALSE
+   ENDIF
+  ;ENDFOLD (BASISTECH STOP)
+
+  ;FOLD BASISTECH RESTART
+   IF TMP_$STOPM THEN
+     P00 (#EXT_ERR,#PGNO_GET,ID[],0 )
+     IF APPL_RUN_L THEN
+       IF (APPL_RUN>0) THEN
+         $OUT[APPL_RUN]=TRUE
+       ENDIF
+     ENDIF
+   ENDIF
+   TMP_$STOPM=FALSE
+  ;ENDFOLD (BASISTECH RESTART)
+  ;FOLD USER RESTART
+   ;Make your modifications here
+
+  ;ENDFOLD (USER RESTART)
+ 
+
+  ;FOLD ;%{H}
+  INTERRUPT ON 3
+  STOPM_FLAG=FALSE
+  ;ENDFOLD
+END
