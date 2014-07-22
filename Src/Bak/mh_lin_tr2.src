@@ -2,7 +2,9 @@
 &REL 2
 &PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
 &PARAM EDITMASK = *
-DEF mh_lin_tr()
+
+; Main program
+DEF mh_lin_tr( )
 
 ; DECL section
 
@@ -74,7 +76,7 @@ mh_velocity = 200
 mh_framecount = 1
 mh_tolerance = 20
 
-; Receive structure
+; receive structure
 rectext[1].s[] = "Mateusz.ExternalData"
 rectext[2].s[] = "Mateusz.ExternalData.Mode"
 rectext[3].s[] = "Mateusz.ExternalData.Tick"
@@ -85,24 +87,23 @@ rectext[7].s[] = "Mateusz.ExternalData.Tol"
 rectext[8].s[] = "Mateusz.ExternalData.Frames"
 rectext[9].s[] = "Mateusz.ExternalData.XFrame"
 
-; Open channel
+;Open channel
 sensorname[]="Mateusz"
 errint = EKX_open(sensorname[])
 EKX_handleerror(errint)
 
-; Wait a little to let channel open
+;Wait a little to let channel open
 WAIT SEC mh_wait_seconds
-
-; Start timer for tick report
-$TIMER[1] = 0
-$TIMER_STOP[1]=FALSE
 
 ; The channel is open and the server expect data from robot
 ; This is the very first message - telling that robot is ready.
 mh_robot_status = 0 ; 0 means "Ready"
 mh_out_traject_id = 0	; 0 means no trajectory, trajectory_id shall start at 1
+mh_send_report()
 
-mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+
+$TIMER[1] = 0
+$TIMER_STOP[1]=FALSE
 
 ; ------------------------------------------------------------------
 ; *** Main loop ***
@@ -170,8 +171,7 @@ ENDIF
 ; report that a message has been received
 mh_robot_status = 1	; 1 means robot is about to execute a trajectory
 mh_out_traject_id = mh_in_traject_id	; so we can tell which trajectory is received
-
-mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+mh_send_report()
 
 ; ---------------------------------
 ; Move loop
@@ -195,8 +195,8 @@ ENDFOR
 
 ; report that a trajectory has been received
 mh_robot_status = 2	; 2 means robot finished executing a trajectory
+mh_send_report()
 
-mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
 
 ENDWHILE
 ; ------------------------------------------------------------------
@@ -207,8 +207,7 @@ ENDWHILE
 ; final report
 mh_robot_status = 3	; 3 means ending program
 mh_out_traject_id = 0	; no trajectory
-
-mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+mh_send_report()
 
 errbl = EKX_close(sensorname[])
 IF errbl == FALSE THEN
@@ -218,43 +217,42 @@ ENDIF
 END	; end main program
 
 ; ------------------------------------------------------------------
-; Subprogram
-; Report send
+; Subprograms
 ; ------------------------------------------------------------------
 
-DEF mh_send_report(X1:IN,X2:IN,X3:IN,X4:IN,X5:IN)
-INT X1,X2,X3,X4,X5,mh_errint
 
-mh_errint = EKX_WriteInteger("Mateusz.Robot.Status", X1)
-EKX_handleerror(mh_errint)
+DEF mh_send_report()
 
-mh_errint = EKX_WriteInteger("Mateusz.Robot.Error", X2)
-EKX_handleerror(mh_errint)
+errint = EKX_WriteInteger("Mateusz.Robot.Status", mh_robot_status)
+EKX_handleerror(errint)
 
-mh_errint = EKX_WriteInteger("Mateusz.Robot.Mode", X3)
-EKX_handleerror(mh_errint)
+errint = EKX_WriteInteger("Mateusz.Robot.Error", errint)
+EKX_handleerror(errint)
 
-mh_errint = EKX_WriteInteger("Mateusz.Robot.Tick", X4)
-EKX_handleerror(mh_errint)
+errint = EKX_WriteInteger("Mateusz.Robot.Mode", mh_mode)
+EKX_handleerror(errint)
 
-mh_errint = EKX_WriteInteger("Mateusz.Robot.Id", X5)
-EKX_handleerror(mh_errint)
+errint = EKX_WriteInteger("Mateusz.Robot.Tick", $TIMER[1])
+EKX_handleerror(errint)
 
-mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", $pos_act.x)
-EKX_handleerror(mh_errint)
-mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", $pos_act.y)
-EKX_handleerror(mh_errint)
-mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", $pos_act.z)
-EKX_handleerror(mh_errint)
-mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", $pos_act.a)
-EKX_handleerror(mh_errint)
-mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
-EKX_handleerror(mh_errint)
-mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
-EKX_handleerror(mh_errint)
+errint = EKX_WriteInteger("Mateusz.Robot.Id", mh_out_traject_id)
+EKX_handleerror(errint)
+
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", $pos_act.x)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", $pos_act.y)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", $pos_act.z)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", $pos_act.a)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
+EKX_handleerror(errint)
+errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
+EKX_handleerror(errint)
 
 ; Send document
-mh_errint = EKX_Send("Mateusz")
-EKX_handleerror(mh_errint)
+errint = EKX_Send("Mateusz")
+EKX_handleerror(errint)
 
 END
