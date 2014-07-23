@@ -35,12 +35,11 @@ REAL mh_velocity
 INT mh_framecount
 INT mh_frameloop_counter
 INT mh_tolerance
-INT mh_timr_interval
 
 DECL STATE_T state
 
 
-INTERRUPT DECL 12 WHEN $TIMER_FLAG[2] DO mh_timed_report()
+INTERRUPT DECL 12 WHEN $TIMER_FLAG[2] DO mh_timed_report2()
 
 ; ------------------------------------------------------------------
 ; Required INI for security
@@ -80,7 +79,7 @@ mh_robot_status = 0
 mh_velocity = 200
 mh_framecount = 1
 mh_tolerance = 20
-mh_timr_interval = -100
+;mh_timr_interval = -100
 
 ; Receive structure
 rectext[1].s[] = "Mateusz.ExternalData"
@@ -105,18 +104,13 @@ WAIT SEC mh_wait_seconds
 $TIMER[1] = 0
 $TIMER_STOP[1]=FALSE
 
-; Start interrupt timer
-$TIMER_FLAG[2] = FALSE
-$TIMER[2] = mh_timr_interval ; timers only update in 12ms increments
-$TIMER_STOP[2] = FALSE
-INTERRUPT ON 12
-
 ; The channel is open and the server expect data from robot
 ; This is the very first message - telling that robot is ready.
 mh_robot_status = 0 ; 0 means "Ready"
 mh_out_traject_id = 0	; 0 means no trajectory, trajectory_id shall start at 1
 
 mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+
 
 ; ------------------------------------------------------------------
 ; *** Main loop ***
@@ -187,6 +181,12 @@ mh_out_traject_id = mh_in_traject_id	; so we can tell which trajectory is receiv
 
 mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
 
+; Start interrupt timer
+$TIMER_FLAG[2] = FALSE
+$TIMER[2] = -100 ; timers only update in 12ms increments
+$TIMER_STOP[2] = FALSE
+INTERRUPT ON 12
+
 ; ---------------------------------
 ; Move loop
 ; Iterate all frames in this trajectory
@@ -207,7 +207,11 @@ ENDFOR
 ; End move loop
 ; ---------------------------------
 
-; report that a trajectory has been received
+; Stop interrupt timer
+$TIMER_STOP[2] = TRUE
+INTERRUPT OFF 12
+
+; report that a trajectory has been finished
 mh_robot_status = 2	; 2 means robot finished executing a trajectory
 
 mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
@@ -277,43 +281,36 @@ END
 ; Interrupt
 ; Report send
 ; ------------------------------------------------------------------
+
 DEF mh_timed_report()
-
 INT mh_errint
-DECL str CHAR mh_str[81]
-DECL STATE_T mh_state
 
-; let's say mode 1 means "timed report" (rename it later)
-SWRITE(mh_str, mh_state,0,"%f",1)
-mh_errint = EKX_WriteString("Mateusz.Robot.Mode", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Status", 3)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%d",$TIMER[1])
-mh_errint = EKX_WriteString("Mateusz.Robot.Tick", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Error", 1)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.x)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.X", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Mode", 1)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.y)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Y", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Tick", $TIMER[1])
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.z)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Z", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Id", 0)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.a)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.A", mh_str)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", $pos_act.x)
 EKX_handleerror(mh_errint)
-
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.b)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.B", mh_str)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", $pos_act.y)
 EKX_handleerror(mh_errint)
-
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.c)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.C", mh_str)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", $pos_act.z)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", $pos_act.a)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
 EKX_handleerror(mh_errint)
 
 ; Send document
@@ -321,7 +318,7 @@ mh_errint = EKX_Send("Mateusz")
 EKX_handleerror(mh_errint)
 
 ; reset timer
-$TIMER[2] = mh_timr_interval ; timers only update in 12ms increments
+$TIMER[2] = -100 ; timers only update in 12ms increments
 $TIMER_FLAG[2] = FALSE
 $TIMER_STOP[2] = FALSE
 

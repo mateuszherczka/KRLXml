@@ -39,9 +39,6 @@ INT mh_trig_dist
 
 DECL STATE_T state
 
-
-INTERRUPT DECL 12 WHEN $TIMER_FLAG[2] DO mh_timed_report()
-
 ; ------------------------------------------------------------------
 ; Required INI for security
 ; ------------------------------------------------------------------
@@ -115,6 +112,7 @@ mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
 ; ------------------------------------------------------------------
 ; *** Main loop ***
 ; From now on robot waits for data, moves, and sends back reports
+; Main loop ends when message sets mh_running to 0
 ; ------------------------------------------------------------------
 WHILE mh_running == TRUE
 
@@ -193,7 +191,7 @@ IF errbl == FALSE THEN
    HALT
 ENDIF
 
-TRIGGER WHEN PATH = mh_trig_dist DELAY = 0 DO mh_trig_report()
+TRIGGER WHEN PATH = mh_trig_dist DELAY = 0 DO mh_trig_report() PRIO = 12
 
 ; move with distance approximation
 LIN extframe C_DIS
@@ -274,42 +272,34 @@ END
 ; Report send
 ; ------------------------------------------------------------------
 DEF mh_trig_report()
-
 INT mh_errint
-DECL str CHAR mh_str[81]
-DECL STATE_T mh_state
 
-; let's say mode 1 means "timed report" (rename it later)
-SWRITE(mh_str, mh_state,0,"%f",1)
-mh_errint = EKX_WriteString("Mateusz.Robot.Mode", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Status", 3)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%d",$TIMER[1])
-mh_errint = EKX_WriteString("Mateusz.Robot.Tick", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Error", 1)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.x)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.X", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Mode", 1)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.y)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Y", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Tick", $TIMER[1])
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.z)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Z", mh_str)
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Id", 0)
 EKX_handleerror(mh_errint)
 
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.a)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.A", mh_str)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", $pos_act.x)
 EKX_handleerror(mh_errint)
-
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.b)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.B", mh_str)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", $pos_act.y)
 EKX_handleerror(mh_errint)
-
-SWRITE(mh_str, mh_state,0,"%f",$pos_act.c)
-mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.C", mh_str)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", $pos_act.z)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", $pos_act.a)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
 EKX_handleerror(mh_errint)
 
 ; Send document
@@ -317,3 +307,4 @@ mh_errint = EKX_Send("Mateusz")
 EKX_handleerror(mh_errint)
 
 END
+
