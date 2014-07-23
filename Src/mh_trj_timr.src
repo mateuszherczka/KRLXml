@@ -1,0 +1,328 @@
+&ACCESS RVP
+&REL 2
+&PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
+&PARAM EDITMASK = *
+DEF mh_trj_timr()
+
+; DECL section
+
+; Kuka's variables
+STRUC str char s[81]
+DECL str sendtext[9]
+DECL str rectext[10]
+DECL char sensorname[40]
+DECL str dummy
+BOOL errbl
+BOOL brk
+INT  errint
+INT i
+INT counter
+FRAME extframe
+BOOL bNew
+
+; MH Variables
+; prepending with mh because namespace is full of robot variables
+INT mh_wait_seconds
+BOOL mh_running
+INT	mh_in_tick
+
+INT	mh_mode
+INT	mh_in_traject_id
+INT	mh_out_traject_id
+
+INT mh_robot_status
+REAL mh_velocity
+INT mh_framecount
+INT mh_frameloop_counter
+INT mh_tolerance
+INT mh_timr_interval
+
+DECL STATE_T state
+
+
+INTERRUPT DECL 12 WHEN $TIMER_FLAG[2] DO mh_timed_report()
+
+; ------------------------------------------------------------------
+; Required INI for security
+; ------------------------------------------------------------------
+GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+INTERRUPT ON 3
+; ------------------------------------------------------------------
+
+; ------------------------------------------------------------------
+; BCO - PTP HOME
+; Robot must do a BCO before anything else
+; ------------------------------------------------------------------
+BAS (#INITMOV,0 )
+$BWDSTART=FALSE
+PDAT_ACT=PDEFAULT
+FDAT_ACT=FHOME
+BAS(#PTP_PARAMS,30)
+$H_POS=XHOME
+PTP XHOME
+; ------------------------------------------------------------------
+
+
+;Init variables
+brk = FALSE
+counter = 0
+
+mh_wait_seconds = 1
+mh_running = TRUE
+mh_in_tick = 0
+
+errint = 0
+mh_mode = 0
+mh_in_traject_id = 0
+mh_out_traject_id = 0
+
+mh_robot_status = 0
+mh_velocity = 200
+mh_framecount = 1
+mh_tolerance = 20
+mh_timr_interval = -100
+
+; Receive structure
+rectext[1].s[] = "Mateusz.ExternalData"
+rectext[2].s[] = "Mateusz.ExternalData.Mode"
+rectext[3].s[] = "Mateusz.ExternalData.Tick"
+rectext[4].s[] = "Mateusz.ExternalData.Id"
+rectext[5].s[] = "Mateusz.ExternalData.Run"
+rectext[6].s[] = "Mateusz.ExternalData.Vel"
+rectext[7].s[] = "Mateusz.ExternalData.Tol"
+rectext[8].s[] = "Mateusz.ExternalData.Frames"
+rectext[9].s[] = "Mateusz.ExternalData.XFrame"
+
+; Open channel
+sensorname[]="Mateusz"
+errint = EKX_open(sensorname[])
+EKX_handleerror(errint)
+
+; Wait a little to let channel open
+WAIT SEC mh_wait_seconds
+
+; Start timer for tick report
+$TIMER[1] = 0
+$TIMER_STOP[1]=FALSE
+
+; Start interrupt timer
+$TIMER_FLAG[2] = FALSE
+$TIMER[2] = mh_timr_interval ; timers only update in 12ms increments
+$TIMER_STOP[2] = FALSE
+INTERRUPT ON 12
+
+; The channel is open and the server expect data from robot
+; This is the very first message - telling that robot is ready.
+mh_robot_status = 0 ; 0 means "Ready"
+mh_out_traject_id = 0	; 0 means no trajectory, trajectory_id shall start at 1
+
+mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+
+; ------------------------------------------------------------------
+; *** Main loop ***
+; From now on robot waits for data, moves, and sends back reports
+; ------------------------------------------------------------------
+WHILE mh_running == TRUE
+
+;Get Data from stack, only if there are new values
+
+; The 0 means that we want next, not last (see krlxml.src)
+; -1 means no timeout
+errbl = EKX_WaitForSensorData(0, rectext[1].s[], -1)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get mode
+errbl = EKX_GetIntegerElement(0, rectext[2].s[], mh_mode, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get tick
+errbl = EKX_GetIntegerElement(0, rectext[3].s[], mh_in_tick, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get id
+errbl = EKX_GetIntegerElement(0, rectext[4].s[], mh_in_traject_id, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get mh_running - a zero will terminate main loop after trajectory
+errbl = EKX_GetBoolElement(0, rectext[5].s[], mh_running, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; get velocity
+errbl = EKX_GetRealElement(0, rectext[6].s[], mh_velocity, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; set velocity for trajectory
+$VEL.CP = (mh_velocity*0.001)
+
+; get tolerance
+errbl = EKX_GetIntegerElement(0, rectext[7].s[], mh_tolerance, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; set tolerance for trajectory
+$APO.CDIS=mh_tolerance
+
+; get framecount
+errbl = EKX_GetIntegerElement(0, rectext[8].s[], mh_framecount, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; report that a message has been received
+mh_robot_status = 1	; 1 means robot is about to execute a trajectory
+mh_out_traject_id = mh_in_traject_id	; so we can tell which trajectory is received
+
+mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+
+; ---------------------------------
+; Move loop
+; Iterate all frames in this trajectory
+; ---------------------------------
+FOR mh_frameloop_counter = 1 TO mh_framecount STEP 1 
+
+; get frame
+errbl = EKX_GetFrameElement( 0,  rectext[9].s[], extframe, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; move with distance approximation
+LIN extframe C_DIS
+
+ENDFOR
+; ---------------------------------
+; End move loop
+; ---------------------------------
+
+; report that a trajectory has been received
+mh_robot_status = 2	; 2 means robot finished executing a trajectory
+
+mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+
+ENDWHILE
+; ------------------------------------------------------------------
+; End of main loop
+; We get here when mh_running is set to false
+; ------------------------------------------------------------------
+
+; final report
+mh_robot_status = 3	; 3 means ending program
+mh_out_traject_id = 0	; no trajectory
+
+mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
+
+errbl = EKX_close(sensorname[])
+IF errbl == FALSE THEN
+  HALT
+ENDIF
+
+END	; end main program
+
+; ------------------------------------------------------------------
+; Subprogram
+; Report send
+; ------------------------------------------------------------------
+
+DEF mh_send_report(X1:IN,X2:IN,X3:IN,X4:IN,X5:IN)
+INT X1,X2,X3,X4,X5,mh_errint
+
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Status", X1)
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Error", X2)
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Mode", X3)
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Tick", X4)
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteInteger("Mateusz.Robot.Id", X5)
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.X", $pos_act.x)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Y", $pos_act.y)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.Z", $pos_act.z)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.A", $pos_act.a)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
+EKX_handleerror(mh_errint)
+
+; Send document
+mh_errint = EKX_Send("Mateusz")
+EKX_handleerror(mh_errint)
+
+END
+
+; ------------------------------------------------------------------
+; Interrupt
+; Report send
+; ------------------------------------------------------------------
+DEF mh_timed_report()
+
+INT mh_errint
+DECL str CHAR mh_str[81]
+DECL STATE_T mh_state
+
+; let's say mode 1 means "timed report" (rename it later)
+SWRITE(mh_str, mh_state,0,"%f",1)
+mh_errint = EKX_WriteString("Mateusz.Robot.Mode", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%d",$TIMER[1])
+mh_errint = EKX_WriteString("Mateusz.Robot.Tick", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.x)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.X", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.y)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Y", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.z)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Z", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.a)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.A", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.b)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.B", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.c)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.C", mh_str)
+EKX_handleerror(mh_errint)
+
+; Send document
+mh_errint = EKX_Send("Mateusz")
+EKX_handleerror(mh_errint)
+
+; reset timer
+$TIMER[2] = mh_timr_interval ; timers only update in 12ms increments
+$TIMER_FLAG[2] = FALSE
+$TIMER_STOP[2] = FALSE
+
+END

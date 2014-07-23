@@ -2,7 +2,7 @@
 &REL 2
 &PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
 &PARAM EDITMASK = *
-DEF mh_lin_tr()
+DEF mh_trj_trigr()
 
 ; DECL section
 
@@ -35,12 +35,19 @@ REAL mh_velocity
 INT mh_framecount
 INT mh_frameloop_counter
 INT mh_tolerance
+INT mh_trig_dist
 
 DECL STATE_T state
 
-;BASISTECH INI
-;GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
-;INTERRUPT ON 3
+
+INTERRUPT DECL 12 WHEN $TIMER_FLAG[2] DO mh_timed_report()
+
+; ------------------------------------------------------------------
+; Required INI for security
+; ------------------------------------------------------------------
+GLOBAL INTERRUPT DECL 3 WHEN $STOPMESS==TRUE DO IR_STOPM ( )
+INTERRUPT ON 3
+; ------------------------------------------------------------------
 
 ; ------------------------------------------------------------------
 ; BCO - PTP HOME
@@ -73,6 +80,7 @@ mh_robot_status = 0
 mh_velocity = 200
 mh_framecount = 1
 mh_tolerance = 20
+mh_trig_dist = 0
 
 ; Receive structure
 rectext[1].s[] = "Mateusz.ExternalData"
@@ -173,10 +181,10 @@ mh_out_traject_id = mh_in_traject_id	; so we can tell which trajectory is receiv
 
 mh_send_report(mh_robot_status,errint,mh_mode,$TIMER[1],mh_out_traject_id)
 
-; ---------------------------------
+; ===============================================
 ; Move loop
 ; Iterate all frames in this trajectory
-; ---------------------------------
+; ===============================================
 FOR mh_frameloop_counter = 1 TO mh_framecount STEP 1 
 
 ; get frame
@@ -185,13 +193,15 @@ IF errbl == FALSE THEN
    HALT
 ENDIF
 
+TRIGGER WHEN PATH = mh_trig_dist DELAY = 0 DO mh_trig_report()
+
 ; move with distance approximation
 LIN extframe C_DIS
 
 ENDFOR
-; ---------------------------------
+; ===============================================
 ; End move loop
-; ---------------------------------
+; ===============================================
 
 ; report that a trajectory has been received
 mh_robot_status = 2	; 2 means robot finished executing a trajectory
@@ -251,6 +261,55 @@ EKX_handleerror(mh_errint)
 mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.B", $pos_act.b)
 EKX_handleerror(mh_errint)
 mh_errint = EKX_WriteReal("Mateusz.Robot.ActPos.C", $pos_act.c)
+EKX_handleerror(mh_errint)
+
+; Send document
+mh_errint = EKX_Send("Mateusz")
+EKX_handleerror(mh_errint)
+
+END
+
+; ------------------------------------------------------------------
+; Triggered
+; Report send
+; ------------------------------------------------------------------
+DEF mh_trig_report()
+
+INT mh_errint
+DECL str CHAR mh_str[81]
+DECL STATE_T mh_state
+
+; let's say mode 1 means "timed report" (rename it later)
+SWRITE(mh_str, mh_state,0,"%f",1)
+mh_errint = EKX_WriteString("Mateusz.Robot.Mode", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%d",$TIMER[1])
+mh_errint = EKX_WriteString("Mateusz.Robot.Tick", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.x)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.X", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.y)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Y", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.z)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.Z", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.a)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.A", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.b)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.B", mh_str)
+EKX_handleerror(mh_errint)
+
+SWRITE(mh_str, mh_state,0,"%f",$pos_act.c)
+mh_errint = EKX_WriteString("Mateusz.Robot.ActPos.C", mh_str)
 EKX_handleerror(mh_errint)
 
 ; Send document
