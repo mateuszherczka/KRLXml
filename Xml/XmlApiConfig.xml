@@ -40,5 +40,8 @@
 <Channel SensorName="Mateusz" SensorType="MH">
 	<TCP_IP IP="192.168.7.105" Port="6008" Route="true" MapPort="6008"/>
 </Channel>
+<Channel SensorName="Kuros" SensorType="MH">
+	<TCP_IP IP="192.168.7.105" Port="6008" Route="true" MapPort="6008"/>
+</Channel>
 <!-- END DEMO -->
 </XmlApiConfig>

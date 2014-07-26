@@ -191,7 +191,7 @@ IF errbl == FALSE THEN
    HALT
 ENDIF
 
-TRIGGER WHEN PATH = mh_trig_dist DELAY = 0 DO mh_trig_report() PRIO = 12
+TRIGGER WHEN PATH = mh_trig_dist DELAY = 0 DO mh_trig_report() PRIO = 11
 
 ; move with distance approximation
 LIN extframe C_DIS

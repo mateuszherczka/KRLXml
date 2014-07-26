@@ -1,0 +1,5 @@
+INT mh_response_stream_ms
+INT mh_robot_status
+INT	mh_in_traject_id
+INT	mh_out_traject_id
+INT mh_frame_type
