@@ -41,7 +41,7 @@ BOOL mh_response_stream_cont
 DECL STATE_T state
 
 
-INTERRUPT DECL 12 WHEN $TIMER_FLAG[2] DO mh_timed_report()
+INTERRUPT DECL 12 WHEN $TIMER_FLAG[2] DO mh_timed_response()
 
 ; ------------------------------------------------------------------
 ; Required INI for security
@@ -111,8 +111,8 @@ $TIMER_STOP[1]=FALSE
 
 ; The channel is open and the server expect data from robot
 ; This is the very first message - telling that robot is ready.
-mh_robot_status = 1 ; 1 means "Ready"
-mh_out_traject_id = 0	; 0 means no trajectory, trajectory_id shall start at 1
+mh_robot_status = 1 ; 1 means BCO done, "Ready"
+mh_out_traject_id = 0
 
 mh_send_response()
 
@@ -121,6 +121,8 @@ mh_send_response()
 ; From now on robot waits for data, moves, and sends back reports
 ; ------------------------------------------------------------------
 WHILE mh_running == TRUE
+
+WAIT SEC 0 ; break any advance pointer
 
 ;Get Data from stack, only if there are new values
 
@@ -193,6 +195,13 @@ ENDIF
 $APO.CDIS=mh_tolerance
 
 ; ------------------------------------------------------------------
+; get frametype
+errbl = EKX_GetIntegerElement(0, rectext[8].s[], mh_frame_type, bNew)
+IF errbl == FALSE THEN
+   HALT
+ENDIF
+
+; ------------------------------------------------------------------
 ; get framecount
 errbl = EKX_GetIntegerElement(0, rectext[9].s[], mh_framecount, bNew)
 IF errbl == FALSE THEN
@@ -207,19 +216,21 @@ mh_out_traject_id = mh_in_traject_id	; so we can tell which trajectory is receiv
 mh_send_response()
 ; ------------------------------------------------------------------
 
+WAIT SEC 0 ; break advance pointer
+
 IF mh_response_stream == TRUE THEN
 ; Reset and start reporting interrupt
 $TIMER_FLAG[2] = FALSE
-$TIMER[2] = -12 ; timers only update in 12ms increments
+$TIMER[2] = -mh_response_stream_ms ; timers only update in 12ms increments
 $TIMER_STOP[2] = FALSE
 INTERRUPT ON 12
-ELSE
+;ELSE
 ; Reset and stop reporting interrupt
-$TIMER_FLAG[2] = FALSE
-$TIMER[2] = -12 ; timers only update in 12ms increments
-$TIMER_STOP[2] = FALSE
-INTERRUPT OFF 12
-ENDIF
+;$TIMER_FLAG[2] = FALSE
+;$TIMER[2] = -mh_response_stream_ms ; timers only update in 12ms increments
+;$TIMER_STOP[2] = TRUE
+;INTERRUPT OFF 12
+;ENDIF
 
 ; ===============================================
 ; Move loop
@@ -244,11 +255,13 @@ ENDFOR
 ; End move loop
 ; ===============================================
 
-IF mh_response_stream_cont == FALSE
+WAIT SEC 0 ; break advance pointer
+
+;IF mh_response_stream_cont == FALSE THEN
 ; Stop interrupt timer
-$TIMER_STOP[2] = TRUE
 INTERRUPT OFF 12
-ENDIF
+$TIMER_STOP[2] = TRUE
+;ENDIF
 
 ; report that a trajectory has been finished
 mh_robot_status = 4	; Back to 4, ready to receive next trajectory
@@ -279,9 +292,8 @@ ENDIF
 
 END	; end main program
 
-
 ; ------------------------------------------------------------------
-; Interrupt Subprogram
+; Subprogram
 ; Report send
 ; ------------------------------------------------------------------
 
@@ -292,6 +304,56 @@ mh_errint = EKX_WriteInteger("Kuros.Robot.Status", mh_robot_status)
 EKX_handleerror(mh_errint)
 
 mh_errint = EKX_WriteInteger("Kuros.Robot.Id", mh_out_traject_id)
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteInteger("Kuros.Robot.Tick", $TIMER[1])
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteReal("Kuros.Robot.ActPos.X", $pos_act.x)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.ActPos.Y", $pos_act.y)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.ActPos.Z", $pos_act.z)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.ActPos.A", $pos_act.a)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.ActPos.B", $pos_act.b)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.ActPos.C", $pos_act.c)
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteReal("Kuros.Robot.Axis.A1", $axis_act.a1)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.Axis.A2", $axis_act.a2)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.Axis.A3", $axis_act.a3)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.Axis.A4", $axis_act.a4)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.Axis.A5", $axis_act.a5)
+EKX_handleerror(mh_errint)
+mh_errint = EKX_WriteReal("Kuros.Robot.Axis.A6", $axis_act.a6)
+EKX_handleerror(mh_errint)
+
+; Send document
+mh_errint = EKX_Send("Kuros")
+EKX_handleerror(mh_errint)
+
+END
+
+
+; ------------------------------------------------------------------
+; Interrupt Subprogram
+; Timed report send
+; ------------------------------------------------------------------
+
+DEF mh_timed_response()
+INT mh_errint
+
+mh_errint = EKX_WriteInteger("Kuros.Robot.Status", 5)	; define 5 as "response stream"
+EKX_handleerror(mh_errint)
+
+mh_errint = EKX_WriteInteger("Kuros.Robot.Id", mh_out_traject_id) ; is this reliable?
 EKX_handleerror(mh_errint)
 
 mh_errint = EKX_WriteInteger("Kuros.Robot.Tick", $TIMER[1])
