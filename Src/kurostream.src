@@ -28,8 +28,6 @@ BOOL mh_running
 INT	mh_in_tick
 
 INT	mh_mode
-;INT	mh_in_traject_id
-;INT	mh_out_traject_id
 
 ;INT mh_robot_status
 REAL mh_velocity
@@ -64,7 +62,7 @@ $H_POS=XHOME
 PTP XHOME
 ; ------------------------------------------------------------------
 
-$ADVANCE = 1 ; st advance pointer to look 1 step ahead only.
+$ADVANCE = 1 ; advance pointer to look 1 step ahead only.
 
 ;Init variables
 brk = FALSE
@@ -78,7 +76,7 @@ mh_in_tick = 0
 errint = 0
 mh_mode = 0
 mh_in_traject_id = 0
-mh_out_traject_id = 0
+mh_out_traject_id = 0 ; here used to count every correction moved
 
 mh_robot_status = 0
 mh_velocity = 200
@@ -86,7 +84,7 @@ mh_framecount = 1
 mh_tolerance = 20
 mh_response_stream = FALSE
 mh_response_stream_cont = FALSE
-mh_response_stream_ms = 100
+
 
 ; Receive structure
 rectext[1].s[] = "Kurostream.ExternalData"
@@ -113,10 +111,6 @@ WAIT SEC mh_wait_seconds
 mh_robot_status = 1 ; 1 means BCO done, "Ready"
 mh_out_traject_id = 0
 
-; Start timer for tick report
-$TIMER[1] = 0
-$TIMER_STOP[1]=FALSE
-
 mh_send_response()
 
 WAIT SEC 0 ; break any advance pointer
@@ -129,12 +123,25 @@ WAIT SEC 0 ; break any advance pointer
 ; Get Data from stack, only if there are new values
 ; The 1 means LIFO "always the last"
 ; timeout -1 so we wait forever
-mh_newdata = EKX_WaitForSensorData(1, rectext[1].s[], -1)
+errbl = EKX_WaitForSensorData(1, rectext[1].s[], -1)
 IF errbl == FALSE THEN
    HALT	; in stream version we don't care
 ENDIF
 
-mh_robot_status = 3 ; means we are in the main loop
+mh_robot_status = 2 ; means we are in the main loop
+
+mh_send_response()
+
+WAIT SEC 0 ; break any advance pointer
+
+
+
+; Reset and start reporting interrupt
+$TIMER_FLAG[2] = FALSE
+$TIMER[2] = -mh_response_stream_ms
+$TIMER_STOP[2] = FALSE
+INTERRUPT ON 12
+
 
 ; ------------------------------------------------------------------
 ; *** Main loop ***
@@ -142,16 +149,18 @@ mh_robot_status = 3 ; means we are in the main loop
 ; ------------------------------------------------------------------
 WHILE mh_running == TRUE
 
+mh_out_traject_id = mh_out_traject_id + 1
+
 ; ------------------------------------------------------------------
 ; get response mode
-;errbl = EKX_GetIntegerElement(0, rectext[2].s[], mh_mode, bNew)
+;errbl = EKX_GetIntegerElement(1, rectext[2].s[], mh_mode, bNew)
 ;IF errbl == FALSE THEN
 ;   HALT
 ;ENDIF
 
 ; ------------------------------------------------------------------
 ; get response ms
-;errbl = EKX_GetIntegerElement(0, rectext[3].s[], mh_response_stream_ms, bNew)
+;errbl = EKX_GetIntegerElement(1, rectext[3].s[], mh_response_stream_ms, bNew)
 ;IF errbl == FALSE THEN
 ;   HALT
 ;ENDIF
@@ -165,7 +174,7 @@ ENDIF
 
 ; ------------------------------------------------------------------
 ; get running - a zero will terminate main loop after trajectory
-;errbl = EKX_GetBoolElement(0, rectext[5].s[], mh_running, bNew)
+;errbl = EKX_GetBoolElement(1, rectext[5].s[], mh_running, bNew)
 ;IF errbl == FALSE THEN
 ;   HALT
 ;ENDIF
@@ -188,7 +197,7 @@ IF errbl == FALSE THEN
 ENDIF
 
 ; set tolerance for trajectory
-$APO.CDIS=mh_tolerance
+$APO.CDIS=(mh_tolerance*0.01)
 
 ; ------------------------------------------------------------------
 ; get frametype
@@ -214,8 +223,12 @@ ENDWHILE
 
 WAIT SEC 0 ; break advance pointer
 
+; Stop interrupt timer
+INTERRUPT OFF 12
+$TIMER_STOP[2] = TRUE
+
 ; final report
-mh_robot_status = 0	; 0 means exiting program
+mh_robot_status = 0		; 0 means exiting program
 mh_out_traject_id = 0	; no trajectory
 
 mh_send_response()
