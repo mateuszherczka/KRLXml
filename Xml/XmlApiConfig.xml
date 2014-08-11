@@ -37,13 +37,10 @@
 <Channel SensorName="SampleSensor" SensorType="SXT">
 	<TCP_IP IP="130.237.218.24" Port="6008" Route="true" MapPort="6008"/>
 </Channel>
-<Channel SensorName="Mateusz" SensorType="MH">
+<Channel SensorName="Kurostream" SensorType="MH">
 	<TCP_IP IP="192.168.7.107" Port="6008" Route="false" MapPort="6008"/>
 </Channel>
-<Channel SensorName="Kuros" SensorType="MH">
-	<TCP_IP IP="192.168.7.107" Port="6008" Route="false" MapPort="6008"/>
-</Channel>
-<Channel SensorName="Kuros" SensorType="ThorinGandalf">
+<Channel SensorName="Kuros" SensorType="Thorin">
 	<TCP_IP IP="192.168.7.106" Port="6008" Route="false" MapPort="6008"/>
 </Channel>
 <!-- END DEMO -->
