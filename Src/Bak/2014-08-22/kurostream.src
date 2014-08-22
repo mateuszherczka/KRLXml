@@ -1,5 +1,5 @@
 &ACCESS RVP
-&REL 11
+&REL 3
 &PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
 &PARAM EDITMASK = *
 DEF kurostream()
@@ -22,9 +22,7 @@ DECL STATE_T state
 INT mh_wait_seconds
 BOOL mh_running
 INT mh_in_traject_id
-REAL mh_velocity
-INT mh_tolerance
-INT mh_frame_type
+
 ; ------------------------------------------------------------------
 ; Required INI for security
 ; ------------------------------------------------------------------
@@ -52,9 +50,6 @@ $ADVANCE = mh_advance ; advance pointer lookahead
 mh_wait_seconds = 1
 mh_running = TRUE
 mh_in_traject_id = 1
-mh_velocity=200
-mh_tolerance=20
-mh_frame_type=1
 errint = 0
 
 ; Init velocity and approximation tol
@@ -119,7 +114,7 @@ WHILE mh_running == TRUE
 
 ; ------------------------------------------------------------------
 ; get id
-errbl = EKX_GetIntegerElement(1, rectext[4].s[], mh_in_traject_id, bNew)
+errbl = EKX_GetIntegerElement(0, rectext[4].s[], mh_in_traject_id, bNew)
 IF errbl == FALSE THEN
    HALT
 ENDIF
@@ -128,7 +123,7 @@ mh_out_traject_id = mh_in_traject_id
 
 ; ------------------------------------------------------------------
 ; get velocity
-errbl = EKX_GetRealElement(1, rectext[6].s[], mh_velocity, bNew)
+errbl = EKX_GetRealElement(0, rectext[6].s[], mh_velocity, bNew)
 IF errbl == FALSE THEN
    HALT
 ENDIF
@@ -138,7 +133,7 @@ $VEL.CP = (mh_velocity*0.001)
 
 ; ------------------------------------------------------------------
 ; get tolerance
-errbl = EKX_GetIntegerElement(1, rectext[7].s[], mh_tolerance, bNew)
+errbl = EKX_GetIntegerElement(0, rectext[7].s[], mh_tolerance, bNew)
 IF errbl == FALSE THEN
    HALT
 ENDIF
@@ -256,3 +251,4 @@ mh_errint = EKX_Send("Kurostream")
 EKX_handleerror(mh_errint)
 
 END
+

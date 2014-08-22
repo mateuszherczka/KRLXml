@@ -1,5 +1,5 @@
 &ACCESS RVP
-&REL 164
+&REL 2
 &PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
 &PARAM EDITMASK = *
 DEF kuros()
@@ -18,7 +18,6 @@ INT  errint
 INT i
 INT counter
 FRAME extframe
-AXIS tmpaxis
 BOOL bNew
 
 ; MH Variables
@@ -28,9 +27,9 @@ BOOL mh_running
 INT	mh_in_tick
 
 INT	mh_mode
-INT	mh_in_traject_id
+;INT	mh_in_traject_id
 ;INT	mh_out_traject_id
-INT mh_frame_type
+
 ;INT mh_robot_status
 REAL mh_velocity
 INT mh_framecount
@@ -77,7 +76,6 @@ errint = 0
 mh_mode = 0
 mh_in_traject_id = 0
 mh_out_traject_id = 0
-mh_frame_type = 1
 
 mh_robot_status = 0
 mh_velocity = 200
@@ -124,7 +122,7 @@ mh_send_response()
 ; ------------------------------------------------------------------
 WHILE mh_running == TRUE
 
-WAIT SEC 0 ;make sure advance is broken
+WAIT SEC 0 ; break any advance pointer
 
 ;Get Data from stack, only if there are new values
 
@@ -184,15 +182,8 @@ IF errbl == FALSE THEN
 ENDIF
 
 ; set velocity for trajectory
-$VEL.CP = (mh_velocity*0.001) ; for cartesian
+$VEL.CP = (mh_velocity*0.001)
 
-
-$VEL_AXIS[1]=(mh_velocity*0.01) ; for axis
-$VEL_AXIS[2]=(mh_velocity*0.01) ; for axis
-$VEL_AXIS[3]=(mh_velocity*0.01) ; for axis
-$VEL_AXIS[4]=(mh_velocity*0.01) ; for axis
-$VEL_AXIS[5]=(mh_velocity*0.01) ; for axis
-$VEL_AXIS[6]=(mh_velocity*0.01) ; for axis
 ; ------------------------------------------------------------------
 ; get tolerance
 errbl = EKX_GetIntegerElement(0, rectext[7].s[], mh_tolerance, bNew)
@@ -225,7 +216,7 @@ mh_out_traject_id = mh_in_traject_id	; so we can tell which trajectory is receiv
 mh_send_response()
 ; ------------------------------------------------------------------
 
-WAIT SEC 0 ;break advance pointer
+WAIT SEC 0 ; break advance pointer
 
 IF mh_response_stream == TRUE THEN
 ; Reset and start reporting interrupt
@@ -233,8 +224,13 @@ $TIMER_FLAG[2] = FALSE
 $TIMER[2] = -mh_response_stream_ms ; timers only update in 12ms increments
 $TIMER_STOP[2] = FALSE
 INTERRUPT ON 12
-
-ENDIF
+;ELSE
+; Reset and stop reporting interrupt
+;$TIMER_FLAG[2] = FALSE
+;$TIMER[2] = -mh_response_stream_ms ; timers only update in 12ms increments
+;$TIMER_STOP[2] = TRUE
+;INTERRUPT OFF 12
+;ENDIF
 
 ; ===============================================
 ; Move loop
@@ -251,41 +247,21 @@ ENDIF
 
 mh_robot_status = 3
 
-; move according to frametype
-SWITCH mh_frame_type
-
-CASE 1
-; cartesian move with distance approximation
-
+; move with distance approximation
 LIN extframe C_DIS
-
-
-CASE 2
-; axis move with distance approximation
-tmpaxis.a1=extframe.x
-tmpaxis.a2=extframe.y
-tmpaxis.a3=extframe.z
-tmpaxis.a4=extframe.a
-tmpaxis.a5=extframe.b
-tmpaxis.a6=extframe.c
-PTP tmpaxis C_PTP
-
-DEFAULT
-; only framtype 1 or 2 are supported
-HALT
-
-ENDSWITCH
 
 ENDFOR
 ; ===============================================
 ; End move loop
 ; ===============================================
 
-WAIT SEC 0; break advance
+WAIT SEC 0 ; break advance pointer
 
+;IF mh_response_stream_cont == FALSE THEN
 ; Stop interrupt timer
 INTERRUPT OFF 12
 $TIMER_STOP[2] = TRUE
+;ENDIF
 
 ; report that a trajectory has been finished
 mh_robot_status = 4	; Back to 4, ready to receive next trajectory

@@ -1,13 +1,14 @@
 &ACCESS RVP
-&REL 219
+&REL 11
 &PARAM TEMPLATE = C:\KRC\Roboter\Template\vorgabe
 &PARAM EDITMASK = *
-DEFDAT KUROSTREAM
+DEFDAT  KUROSTREAM
 
-INT mh_response_stream_ms = 12
+; default
+INT mh_advance=1 ; advance pointer lookahead
+ 
+; init
+INT mh_robot_status=2
+INT mh_out_traject_id=666
 
-INT mh_robot_status	= 0
-INT	mh_in_traject_id = 0
-INT	mh_out_traject_id = 0
-INT mh_frame_type = 1
 ENDDAT
